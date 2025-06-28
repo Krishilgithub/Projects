@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masking Example</title>
+    <style>
+        .section {
+            width: 400px;
+            height: 400px;
+            background: url("img.png");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            mask: url("star-svg.svg") no-repeat center;
+            mask-size: contain;
+            -webkit-mask: url("star-svg.svg") no-repeat center;
+            -webkit-mask-size: contain;
+        }
+
+        /* Optional: Add background to test the mask */
+        body {
+            background-color: #222;
+            display: flex;
+            gap: 50px;
+            padding: 20px;
+        }
+
+        .section-2 {
+            position: relative;
+            width: 400px;
+            height: 400px;
+        }
+
+        .section-2 .img {
+            height: 100%;
+            width: 100%;
+            background: url("img.png");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .section-2 h1 {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            /*font-size: 24px;*/
+            /*font-weight: bold;*/
+            text-align: center;
+            background: linear-gradient(to right, #ff7e5f, #feb47b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent; /* Makes text transparent to show gradient */
+            mask-image: linear-gradient(to right, #ff7e5f, #feb47b);
+            -webkit-mask-image: linear-gradient(to right, #ff7e5f, #feb47b);
+            mask-composite: exclude; /* Ensures masking behavior works for text */
+        }
+    </style>
+</head>
+<body>
+<div class="section"></div>
+<div class="section-2">
+    <div class="img"></div>
+    <h1>Hello There my name is Krishil</h1>
+</div>
+</body>
+</html>

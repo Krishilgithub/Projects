@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$/Projects" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Personal Demo/jack-portfolio" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Practice/Ventix-Portfolio-" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Practice/duo-studio" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Practice/modern-website-react-tailwind" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Practice/shopsy" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Practice/space-web" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Practice/thecodingjourney" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Projects/Travel Demo/tourly" vcs="Git" />
+  </component>
+</project>

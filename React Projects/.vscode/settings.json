@@ -1,0 +1,8 @@
+{
+    "files.autoSave": "afterDelay",
+    "editor.tabSize": 2,
+    "editor.wordWrap": "on",
+    "editor.pasteAs.enabled": true,
+    "editor.pasteAs.showPasteSelector": "afterPaste",
+    "editor.formatOnPaste": true
+}
