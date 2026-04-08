@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scaling RAG: From Naive Retrieval to Agentic Chunking (2026 Deep-Dive)</title>
+<meta name="description" content="80% of RAG failures happen at the chunking layer, not the LLM. Here's how to move from fixed-size splitting to agentic, context-aware chunking in production systems.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f5f0;
+  --bg2: #eeeae2;
+  --bg3: #e5e0d5;
+  --card: #ffffff;
+  --border: rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.14);
+  --text: #1a1916;
+  --muted: #6b6860;
+  --dim: #9e9b93;
+  --ink: #2d2c28;
+  --accent: #c44b2b;
+  --accent2: #1a6b4a;
+  --accent3: #2d5a8e;
+  --accent4: #7a3b8c;
+  --yellow: #e8a020;
+  --code-bg: #1c1c1e;
+  --code-text: #e8e4dc;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Fraunces', Georgia, serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.78;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- TOP STRIPE ---- */
+.stripe {
+  background: var(--accent);
+  height: 4px;
+  width: 100%;
+}
+
+/* ---- NAV ---- */
+.nav {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border2);
+  padding: 14px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-brand {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700; font-size: 15px;
+  color: var(--ink); letter-spacing: -0.01em;
+}
+.nav-tag {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(196,75,43,0.08);
+  border: 1px solid rgba(196,75,43,0.2);
+  padding: 4px 12px; border-radius: 3px;
+}
+
+/* ---- HERO ---- */
+.hero {
+  max-width: 760px; margin: 0 auto;
+  padding: 72px 32px 56px;
+}
+.hero-kicker {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 10px;
+}
+.hero-kicker::after {
+  content: ''; flex: 0 0 32px; height: 1px;
+  background: var(--accent);
+}
+h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(34px, 5.5vw, 58px);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  margin-bottom: 28px;
+}
+h1 em { font-style: italic; color: var(--accent); }
+
+.hero-sub {
+  font-size: 19px;
+  color: var(--muted);
+  max-width: 620px;
+  margin-bottom: 32px;
+  line-height: 1.65;
+  font-weight: 300;
+}
+
+.hero-meta {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; color: var(--dim);
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.hero-meta .sep { color: var(--border2); }
+.hero-meta strong { color: var(--muted); font-weight: 500; }
+
+/* ---- STAT HERO ---- */
+.stat-bar {
+  background: var(--ink);
+  color: #fff;
+  padding: 28px 32px;
+  display: flex; gap: 0;
+  overflow-x: auto;
+}
+.stat-item {
+  flex: 1; min-width: 160px;
+  padding: 0 28px;
+  border-right: 1px solid rgba(255,255,255,0.1);
+}
+.stat-item:first-child { padding-left: 0; }
+.stat-item:last-child { border-right: none; }
+.stat-num {
+  font-family: 'Fraunces', serif;
+  font-size: 40px; font-weight: 600;
+  color: var(--accent); letter-spacing: -0.03em;
+  line-height: 1.1; margin-bottom: 4px;
+}
+.stat-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; color: rgba(255,255,255,0.55);
+  line-height: 1.4;
+}
+
+/* ---- MAIN LAYOUT ---- */
+.layout {
+  max-width: 760px; margin: 0 auto;
+  padding: 0 32px 120px;
+}
+
+/* ---- TYPOGRAPHY ---- */
+h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 30px; font-weight: 600;
+  color: var(--ink); line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 72px 0 20px;
+  padding-top: 24px;
+  border-top: 2px solid var(--border2);
+}
+h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px; font-weight: 600;
+  color: var(--ink); letter-spacing: -0.01em;
+  margin: 36px 0 12px;
+}
+p { margin-bottom: 22px; }
+strong { font-weight: 600; color: var(--ink); font-style: normal; }
+
+a { color: var(--accent3); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---- TL;DR ---- */
+.tldr {
+  background: var(--ink);
+  color: #fff;
+  border-radius: 6px;
+  padding: 28px 32px;
+  margin: 36px 0;
+}
+.tldr-header {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 16px;
+}
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px; color: rgba(255,255,255,0.88);
+  padding-left: 20px; position: relative; line-height: 1.55;
+}
+.tldr li::before {
+  content: '▸'; position: absolute; left: 0;
+  color: var(--accent); font-size: 12px;
+}
+
+/* ---- CALLOUT ---- */
+.callout {
+  border-radius: 4px;
+  padding: 16px 20px;
+  margin: 28px 0;
+  display: flex; gap: 14px;
+  border-left: 3px solid;
+}
+.callout.amber { background: rgba(232,160,32,0.08); border-color: var(--yellow); }
+.callout.green { background: rgba(26,107,74,0.07); border-color: var(--accent2); }
+.callout.red { background: rgba(196,75,43,0.07); border-color: var(--accent); }
+.callout.blue { background: rgba(45,90,142,0.07); border-color: var(--accent3); }
+.callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 15px; line-height: 1.65; color: var(--ink); }
+.callout-body strong { color: var(--ink); }
+
+/* ---- CHUNKING STRATEGY CARDS ---- */
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 28px 0;
+}
+.strategy-card {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 20px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.strategy-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+}
+.sc-naive::before { background: var(--dim); }
+.sc-semantic::before { background: var(--accent3); }
+.sc-structural::before { background: var(--accent2); }
+.sc-agentic::before { background: var(--accent); }
+.sc-badge {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 8px;
+  display: inline-block; padding: 2px 8px; border-radius: 3px;
+}
+.sc-naive .sc-badge { color: var(--dim); background: var(--bg2); }
+.sc-semantic .sc-badge { color: var(--accent3); background: rgba(45,90,142,0.1); }
+.sc-structural .sc-badge { color: var(--accent2); background: rgba(26,107,74,0.1); }
+.sc-agentic .sc-badge { color: var(--accent); background: rgba(196,75,43,0.1); }
+.sc-name {
+  font-family: 'Fraunces', serif;
+  font-size: 17px; font-weight: 600; color: var(--ink);
+  margin-bottom: 8px; line-height: 1.3;
+}
+.sc-desc {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; color: var(--muted); line-height: 1.55;
+  margin-bottom: 12px;
+}
+.sc-when {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; color: var(--dim);
+}
+.sc-when strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); font-weight: 600; }
+
+/* ---- CODE ---- */
+pre {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 22px 24px;
+  overflow-x: auto;
+  margin: 24px 0;
+  font-family: 'Fira Code', monospace;
+  font-size: 13px; line-height: 1.75;
+  color: var(--code-text);
+}
+code {
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
+  color: var(--accent);
+  background: rgba(196,75,43,0.08);
+  padding: 1px 6px; border-radius: 3px;
+}
+pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+.kw { color: #c792ea; }
+.fn { color: #82aaff; }
+.str { color: #c3e88d; }
+.cm { color: #546e7a; font-style: italic; }
+.nb { color: #ffcb6b; }
+.dec { color: #f78c6c; }
+
+/* ---- PIPELINE VISUAL ---- */
+.pipeline {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 28px 24px;
+  margin: 32px 0;
+  overflow-x: auto;
+}
+.pipeline-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim);
+  margin-bottom: 20px;
+}
+
+/* ---- BENCHMARK TABLE ---- */
+.table-wrap { overflow-x: auto; margin: 24px 0; }
+table {
+  width: 100%; border-collapse: collapse;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+}
+th {
+  background: var(--ink); color: #fff;
+  text-align: left; padding: 11px 14px;
+  font-weight: 600; font-size: 12px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  white-space: nowrap;
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted); vertical-align: top;
+  line-height: 1.5;
+}
+tr:last-child td { border-bottom: none; }
+tr:nth-child(even) td { background: var(--bg); }
+td.best { color: var(--accent2); font-weight: 600; }
+td.worst { color: var(--dim); }
+td.mid { color: var(--accent3); }
+td.highlight { color: var(--accent); font-weight: 600; }
+
+/* ---- EVOLUTION TIMELINE ---- */
+.evo-timeline {
+  display: flex; gap: 0;
+  margin: 32px 0;
+  overflow-x: auto;
+}
+.evo-phase {
+  flex: 1; min-width: 150px;
+  border: 1px solid var(--border2);
+  border-right: none;
+  padding: 20px 16px;
+  background: var(--card);
+  position: relative;
+}
+.evo-phase:last-child { border-right: 1px solid var(--border2); }
+.evo-phase.active {
+  background: var(--ink); color: #fff;
+  border-color: var(--ink);
+}
+.evo-num {
+  font-family: 'Fraunces', serif;
+  font-size: 32px; font-weight: 600;
+  color: var(--border2); margin-bottom: 8px;
+  line-height: 1;
+}
+.evo-phase.active .evo-num { color: rgba(255,255,255,0.15); }
+.evo-era {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 6px;
+  color: var(--dim);
+}
+.evo-phase.active .evo-era { color: var(--accent); }
+.evo-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; font-weight: 600;
+  color: var(--ink); line-height: 1.35; margin-bottom: 8px;
+}
+.evo-phase.active .evo-title { color: #fff; }
+.evo-desc {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; color: var(--dim); line-height: 1.5;
+}
+.evo-phase.active .evo-desc { color: rgba(255,255,255,0.6); }
+
+/* ---- OPINION BOX ---- */
+.opinion {
+  border-top: 3px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
+  padding: 32px 0;
+  margin: 56px 0;
+}
+.opinion-text {
+  font-size: 22px; font-weight: 300;
+  color: var(--ink); line-height: 1.55;
+  font-style: italic;
+  margin-bottom: 16px;
+}
+.opinion-attr {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; color: var(--dim);
+}
+
+/* ---- DIVIDER ---- */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border2);
+  margin: 52px 0;
+}
+
+/* ---- CONCLUSION ---- */
+.conclusion {
+  background: var(--bg2);
+  border-radius: 6px;
+  padding: 36px 32px;
+  margin: 56px 0 40px;
+}
+.conclusion h2 { border-top: none; padding-top: 0; margin-top: 0; }
+
+/* ---- CTA ---- */
+.cta {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 28px 32px;
+  margin: 32px 0;
+}
+.cta-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.6); margin-bottom: 10px;
+}
+.cta-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px; line-height: 1.6; color: #fff;
+}
+
+/* ---- DISCUSSION ---- */
+.discussion {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 24px 24px;
+  margin: 36px 0;
+}
+.discussion-q {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px; color: var(--muted); line-height: 1.6;
+}
+.discussion-q strong { color: var(--ink); }
+
+/* ---- RELATED ---- */
+.related-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--dim); margin-bottom: 14px; margin-top: 48px;
+}
+.related-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.related-card {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 16px 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.related-card:hover { border-color: var(--accent); }
+.related-card-tag {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent2); margin-bottom: 8px;
+}
+.related-card-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; font-weight: 600;
+  color: var(--ink); line-height: 1.4;
+}
+
+/* ---- SEO BLOCK ---- */
+.seo-block {
+  border-top: 1px solid var(--border2);
+  margin-top: 64px; padding-top: 28px;
+}
+.seo-block h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 14px; border-top: none; margin-top: 0;
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.seo-tag {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px; color: var(--accent3);
+  background: rgba(45,90,142,0.07);
+  border: 1px solid rgba(45,90,142,0.2);
+  padding: 3px 10px; border-radius: 3px;
+}
+.seo-row {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; color: var(--muted);
+  margin-bottom: 8px;
+}
+.seo-row code { font-size: 12px; color: var(--accent3); }
+
+/* ---- EXCALIDRAW ---- */
+.excali {
+  background: var(--bg2);
+  border: 1px dashed var(--border2);
+  border-radius: 6px;
+  padding: 20px 20px;
+  margin: 28px 0;
+  font-size: 14px; color: var(--muted);
+  font-family: 'Space Grotesk', sans-serif;
+  line-height: 1.7;
+}
+.excali strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--accent4); display: block; margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+  h1 { font-size: 30px; }
+  h2 { font-size: 24px; }
+  .hero { padding: 48px 20px 40px; }
+  .layout { padding: 0 20px 80px; }
+  .stat-bar { padding: 20px; }
+  .stat-item { padding: 0 16px; }
+  .evo-timeline { flex-direction: column; }
+  .evo-phase { border-right: 1px solid var(--border2); border-bottom: none; }
+  .evo-phase:last-child { border-bottom: 1px solid var(--border2); }
+}
+</style>
+</head>
+<body>
+
+<div class="stripe"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">Agentic AI Engineering</div>
+  <div class="nav-tag">Deep-Dive</div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-kicker">RAG Systems · Retrieval Engineering</div>
+  <h1>Scaling RAG Systems: From <em>Naive Retrieval</em> to Agentic Chunking</h1>
+  <div class="hero-sub">80% of RAG failures happen at the chunking layer, not the LLM. Here is how to move from fixed-size splitting to intelligent, context-aware chunking — and when that transition is actually worth the cost.</div>
+  <div class="hero-meta">
+    <strong>Krishil Agrawal</strong>
+    <span class="sep">|</span>
+    <span>14 min read</span>
+    <span class="sep">|</span>
+    <span>~3,100 words</span>
+    <span class="sep">|</span>
+    <span>April 2026</span>
+  </div>
+</header>
+
+<!-- STAT BAR -->
+<div class="stat-bar">
+  <div class="stat-item">
+    <div class="stat-num">80%</div>
+    <div class="stat-label">RAG failures trace back to ingestion &amp; chunking, not the LLM</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">87%</div>
+    <div class="stat-label">Accuracy from adaptive chunking vs 13% for fixed-size baselines (MDPI, 2025)</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">70%</div>
+    <div class="stat-label">Retrieval lift from semantic chunking over naive baselines</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-num">2,500</div>
+    <div class="stat-label">Token "context cliff" where response quality drops sharply (Chroma, 2025)</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="layout">
+
+  <!-- INTRO -->
+  <p style="margin-top: 48px;">Here is the uncomfortable truth about most RAG systems in production: the bottleneck is not your embedding model. It is not your vector database. It is not your prompt template. It is the 10 lines of code that run first — the part where you split a PDF into chunks and hope for the best.</p>
+
+  <p>Most tutorials hand you a <code>RecursiveCharacterTextSplitter</code> with a chunk size of 512 and tell you to proceed. For a prototype, that is fine. For a system processing thousands of documents and serving real users, that choice will quietly break your retrieval in ways that are extremely difficult to debug — because the wrong context will still flow back, just confidently and incorrectly.</p>
+
+  <p>This post is about the full progression: from naive fixed-size chunking, through semantic and structural methods, up to agentic chunking where an AI agent decides how your documents should be split. You will get benchmarks, working Python code for each approach, and a clear framework for deciding which strategy fits your actual problem.</p>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-header">TL;DR</div>
+    <ul>
+      <li>Chunking quality constrains retrieval accuracy more than embedding model choice. The difference between strategies is not marginal — it is the difference between systems that work and ones that don't.</li>
+      <li>Recursive character splitting (400–512 tokens, 10–20% overlap) is still the right default for most production systems. Start there.</li>
+      <li>Semantic chunking gives up to 70% retrieval improvement over naive baselines, but at higher compute cost. Use it for knowledge bases and technical documentation.</li>
+      <li>Agentic chunking — where an LLM dynamically decides the split strategy — delivers the highest accuracy for heterogeneous document sets, but costs 3–5x more per document to index.</li>
+      <li>Keep assembled context under 8K tokens per query. Context quality beats context volume, every time.</li>
+    </ul>
+  </div>
+
+  <!-- EVOLUTION -->
+  <h2>The 3 Generations of RAG Architecture</h2>
+
+  <p>Before we get into chunking strategies, it helps to understand where chunking fits in the broader evolution of RAG systems. This is not just historical background — understanding which generation your system is in tells you which bottleneck to fix next.</p>
+
+  <div class="evo-timeline">
+    <div class="evo-phase">
+      <div class="evo-num">01</div>
+      <div class="evo-era">2020–2023</div>
+      <div class="evo-title">Naive RAG</div>
+      <div class="evo-desc">Fixed chunks, top-k retrieval, direct context stuffing. Simple. Fast. Brittle.</div>
+    </div>
+    <div class="evo-phase">
+      <div class="evo-num">02</div>
+      <div class="evo-era">2023–2025</div>
+      <div class="evo-title">Advanced RAG</div>
+      <div class="evo-desc">Query rewriting, hybrid search, reranking, parent-child chunks, HyDE. LlamaIndex &amp; LangChain era.</div>
+    </div>
+    <div class="evo-phase active">
+      <div class="evo-num">03</div>
+      <div class="evo-era">2025–Now</div>
+      <div class="evo-title">Agentic RAG</div>
+      <div class="evo-desc">Agents decide when and how to retrieve. Multi-step reasoning. Self-correcting. Dynamic chunking strategies.</div>
+    </div>
+  </div>
+
+  <p>Naive RAG follows a fixed "index → retrieve → generate" loop. It works for simple document Q&A. It fails when queries are complex, documents are heterogeneous, or retrieved chunks consistently cut through the middle of a logical idea.</p>
+
+  <p>Advanced RAG patched these problems with pre- and post-retrieval techniques. Query rewriting improved recall. Rerankers improved precision. Parent-child chunking solved the context-too-small problem. But it was still a static pipeline — it could not reason, could not decide to try a different retrieval strategy, and could not tell when its own retrieval had failed.</p>
+
+  <p>Agentic RAG is the current frontier. The retrieval process itself becomes autonomous: agents determine whether retrieval is needed, pick their retrieval source, evaluate whether results are good enough, and re-retrieve if they are not. Agentic chunking sits at the start of this pipeline — before any of that can happen, documents need to be chunked intelligently.</p>
+
+  <hr class="divider">
+
+  <!-- CHUNKING STRATEGIES -->
+  <h2>The Chunking Ladder — 4 Strategies Compared</h2>
+
+  <p>Think of chunking strategies as a ladder. Each rung costs more but handles more complex documents and queries. Most production systems live somewhere in the middle. Almost no one should start at the top.</p>
+
+  <div class="strategy-grid">
+    <div class="strategy-card sc-naive">
+      <div class="sc-badge">Level 1</div>
+      <div class="sc-name">Fixed-Size / Recursive Splitting</div>
+      <div class="sc-desc">Split by token count. The default in LangChain. Add 10–20% overlap to preserve cross-boundary context.</div>
+      <div class="sc-when"><strong>Use when:</strong> Homogeneous content — news articles, support tickets, FAQ entries. Getting a baseline running fast.</div>
+    </div>
+    <div class="strategy-card sc-semantic">
+      <div class="sc-badge">Level 2</div>
+      <div class="sc-name">Semantic Chunking</div>
+      <div class="sc-desc">Embed every sentence and split on cosine distance drops. Groups by meaning, not character count.</div>
+      <div class="sc-when"><strong>Use when:</strong> Technical docs, knowledge bases, research papers where topic shifts matter.</div>
+    </div>
+    <div class="strategy-card sc-structural">
+      <div class="sc-badge">Level 3</div>
+      <div class="sc-name">Structural / Propositional</div>
+      <div class="sc-desc">Split on document structure (headers, sections) or use an LLM to extract atomic propositions from each paragraph.</div>
+      <div class="sc-when"><strong>Use when:</strong> Markdown docs, PDFs with logical sections, legal / policy documents.</div>
+    </div>
+    <div class="strategy-card sc-agentic">
+      <div class="sc-badge">Level 4</div>
+      <div class="sc-name">Agentic Chunking</div>
+      <div class="sc-desc">An LLM agent inspects the full document, decides the optimal strategy, executes it, and enriches chunks with metadata.</div>
+      <div class="sc-when"><strong>Use when:</strong> Heterogeneous corpora, high-stakes retrieval, enterprise knowledge management.</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- LEVEL 1 -->
+  <h2>Level 1 — Recursive Splitting: Still the Right Default</h2>
+
+  <p>Recursive character splitting is not naive — it is pragmatic. It tries to split on natural boundaries first (double newlines, then single newlines, then sentences, then words) and only falls back to arbitrary character cuts when necessary. At 400–512 tokens with 10–20% overlap, it produces chunks that are large enough for meaningful retrieval and small enough that the LLM does not lose the key sentence in the middle.</p>
+
+  <p>A February 2026 benchmark of seven strategies across 50 academic papers placed recursive 512-token splitting at 69% accuracy — first place in that study. That result should not make you lazy about upgrading. It should tell you to <em>start</em> here, measure your actual retrieval performance, and only invest in more expensive strategies when you have data showing they're needed.</p>
+
+<pre><code><span class="kw">from</span> langchain.text_splitters <span class="kw">import</span> RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=<span class="nb">512</span>,
+    chunk_overlap=<span class="nb">51</span>,       <span class="cm"># ~10% overlap to preserve context at boundaries</span>
+    length_function=<span class="fn">len</span>,
+    separators=[<span class="str">"\n\n"</span>, <span class="str">"\n"</span>, <span class="str">"."</span>, <span class="str">" "</span>, <span class="str">""</span>]
+    <span class="cm"># tries double-newline first, falls back progressively</span>
+)
+
+chunks = splitter.<span class="fn">split_text</span>(document_text)
+<span class="cm"># Each chunk: one coherent passage, bounded by natural text breaks
+# Add metadata immediately — source, page, section heading</span>
+
+docs = splitter.<span class="fn">create_documents</span>(
+    [document_text],
+    metadatas=[{<span class="str">"source"</span>: <span class="str">"annual_report_2025.pdf"</span>, <span class="str">"section"</span>: <span class="str">"financials"</span>}]
+)</code></pre>
+
+  <div class="callout amber">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-body"><strong>The metadata rule:</strong> Every chunk needs source metadata at creation time. Retrofitting metadata to chunks later is painful. Track at minimum: document source, section/page, chunk index, creation timestamp. You will need this for citation, debugging, and incremental re-indexing.</div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- LEVEL 2 -->
+  <h2>Level 2 — Semantic Chunking: Split by Meaning, Not by Count</h2>
+
+  <p>The problem with fixed-size splitting is obvious once you state it: a 512-token boundary does not care about your document's logic. It will cheerfully split a sentence at the exact point where a key conclusion is being drawn, putting the first half in chunk 14 and the second half in chunk 15. Retrieve chunk 14 and your LLM gets an incomplete argument. The model does not know what it is missing.</p>
+
+  <p>Semantic chunking fixes this by embedding every sentence and splitting where cosine similarity drops sharply — the natural topic boundary. A peer-reviewed clinical decision support study found adaptive chunking aligned to logical topic boundaries hit 87% accuracy versus 13% for fixed-size baselines on the same corpus. That gap is not marginal.</p>
+
+  <p>The trade-off is compute cost. Semantic chunking requires embedding every sentence before deciding splits. For a 50-page document, that is hundreds of embedding calls at index time — not at query time, but still significant for large corpora.</p>
+
+<pre><code><span class="kw">from</span> langchain_experimental.text_splitter <span class="kw">import</span> SemanticChunker
+<span class="kw">from</span> langchain_openai <span class="kw">import</span> OpenAIEmbeddings
+
+embeddings = <span class="fn">OpenAIEmbeddings</span>(model=<span class="str">"text-embedding-3-small"</span>)
+
+chunker = <span class="fn">SemanticChunker</span>(
+    embeddings,
+    breakpoint_threshold_type=<span class="str">"percentile"</span>,
+    breakpoint_threshold_amount=<span class="nb">95</span>
+    <span class="cm"># split where cosine distance is in the top 5% — i.e., biggest topic shifts</span>
+)
+
+chunks = chunker.<span class="fn">create_documents</span>([document_text])
+
+<span class="cm"># Inspect average chunk size — semantic chunking can produce very short fragments
+# on densely written technical text. If avg < 100 tokens, raise the threshold.</span>
+avg_tokens = <span class="fn">sum</span>(<span class="fn">len</span>(c.page_content.<span class="fn">split</span>()) <span class="kw">for</span> c <span class="kw">in</span> chunks) / <span class="fn">len</span>(chunks)
+<span class="fn">print</span>(f<span class="str">"Avg chunk tokens: {avg_tokens:.0f}"</span>)</code></pre>
+
+  <div class="callout red">
+    <span class="callout-icon">🔍</span>
+    <div class="callout-body"><strong>Watch for micro-chunks.</strong> Semantic chunking sometimes produces fragments averaging 40–50 tokens on dense academic text. A 2026 benchmark found this on scientific papers — the chunker split so aggressively that individual chunks lost enough context to hurt retrieval. If your average chunk is under 100 tokens, increase the breakpoint threshold or switch to a sentence-level method with a minimum chunk size floor.</div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- LEVEL 3 -->
+  <h2>Level 3 — Structural and Propositional Chunking</h2>
+
+  <p>For structured documents — Markdown files, HTML pages, PDFs with clear section headers — the best chunking signal is the document's own structure. Split on headings, not on arbitrary token counts. The document author already decided where the logical boundaries are.</p>
+
+<pre><code><span class="kw">from</span> langchain.text_splitters <span class="kw">import</span> MarkdownHeaderTextSplitter
+
+headers_to_split_on = [
+    (<span class="str">"#"</span>, <span class="str">"h1"</span>),
+    (<span class="str">"##"</span>, <span class="str">"h2"</span>),
+    (<span class="str">"###"</span>, <span class="str">"h3"</span>),
+]
+
+splitter = <span class="fn">MarkdownHeaderTextSplitter</span>(headers_to_split_on=headers_to_split_on)
+chunks = splitter.<span class="fn">split_text</span>(markdown_document)
+
+<span class="cm"># Each chunk carries the full header path as metadata
+# {"h1": "Architecture Guide", "h2": "Retrieval Layer", "h3": "Embedding Models"}
+# This metadata becomes a filter at retrieval time — powerful for large doc sets</span></code></pre>
+
+  <p>Propositional chunking is the premium version of this idea. An LLM processes each paragraph and extracts atomic, self-contained propositions — individual factual claims. Each proposition becomes its own chunk. Retrieval becomes extremely precise because each chunk holds exactly one idea, and the embedding for that chunk is unambiguous.</p>
+
+<pre><code><span class="kw">import</span> anthropic
+
+client = anthropic.<span class="fn">Anthropic</span>()
+
+<span class="kw">def</span> <span class="fn">extract_propositions</span>(paragraph: str) -> list[str]:
+    <span class="cm">"""Use Claude to extract atomic propositions from a paragraph."""</span>
+    response = client.messages.<span class="fn">create</span>(
+        model=<span class="str">"claude-sonnet-4-6"</span>,
+        max_tokens=<span class="nb">1000</span>,
+        messages=[{
+            <span class="str">"role"</span>: <span class="str">"user"</span>,
+            <span class="str">"content"</span>: f<span class="str">"""Extract all atomic, self-contained factual claims from the
+following paragraph. Each claim must be independently understandable without
+reading the paragraph. Return one claim per line, no bullet points.
+
+Paragraph:
+{paragraph}"""</span>
+        }]
+    )
+    <span class="kw">return</span> response.content[<span class="nb">0</span>].text.<span class="fn">strip</span>().<span class="fn">split</span>(<span class="str">"\n"</span>)
+
+<span class="cm"># Input:  "The embedding model converts text into high-dimensional vectors.
+#          These vectors capture semantic meaning. Cosine similarity is used to measure distance."
+# Output: ["Embedding models convert text into high-dimensional vectors",
+#           "Vectors capture semantic meaning",
+#           "Cosine similarity measures distance between vectors"]</span></code></pre>
+
+  <div class="callout green">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Key Insight:</strong> Propositional chunks are the highest-precision retrieval unit you can build. If you only retrieve 3 chunks per query, make sure each chunk holds exactly one idea. The fewer irrelevant tokens in your context window, the better your LLM's answer will be.</div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- LEVEL 4 AGENTIC -->
+  <h2>Level 4 — Agentic Chunking: The LLM Decides How to Split</h2>
+
+  <p>Agentic chunking does not apply a single strategy. It applies an agent that looks at your document and decides which strategy — or combination of strategies — is right for that specific document. A Markdown file gets structural splitting. A dense research paper gets propositional extraction. A lightly formatted internal memo gets recursive splitting with semantic boundary detection. One ingestion agent. Many strategies. Applied intelligently.</p>
+
+  <p>This is the most powerful approach in the chunking ladder. It is also the most expensive. Agentic chunking requires LLM calls per document at index time — not just embedding calls. That costs 3–5x more than baseline RAG for knowledge graph extraction and at least 2–3x more for agentic chunking on average-sized corpora.</p>
+
+<pre><code><span class="kw">import</span> anthropic
+<span class="kw">from</span> langchain.text_splitters <span class="kw">import</span> (
+    RecursiveCharacterTextSplitter,
+    MarkdownHeaderTextSplitter
+)
+
+client = anthropic.<span class="fn">Anthropic</span>()
+
+<span class="kw">def</span> <span class="fn">detect_document_type</span>(document_text: str) -> dict:
+    <span class="cm">"""Agent step 1: Assess the document and recommend a strategy."""</span>
+    response = client.messages.<span class="fn">create</span>(
+        model=<span class="str">"claude-sonnet-4-6"</span>,
+        max_tokens=<span class="nb">300</span>,
+        messages=[{
+            <span class="str">"role"</span>: <span class="str">"user"</span>,
+            <span class="str">"content"</span>: f<span class="str">"""Analyze this document excerpt and return JSON only.
+
+Fields:
+- document_type: one of [markdown, academic, policy, conversational, code, mixed]
+- has_clear_headers: true/false
+- avg_paragraph_density: one of [sparse, medium, dense]
+- recommended_strategy: one of [structural, semantic, propositional, recursive]
+- recommended_chunk_size: integer tokens
+
+Document excerpt (first 800 chars):
+{document_text[:800]}"""</span>
+        }]
+    )
+    <span class="kw">import</span> json
+    raw = response.content[<span class="nb">0</span>].text
+    <span class="kw">return</span> json.<span class="fn">loads</span>(raw)
+
+<span class="kw">def</span> <span class="fn">agentic_chunk</span>(document_text: str) -> list:
+    <span class="cm">"""Route each document to the right chunking strategy."""</span>
+    assessment = <span class="fn">detect_document_type</span>(document_text)
+    strategy = assessment[<span class="str">"recommended_strategy"</span>]
+
+    <span class="kw">if</span> strategy == <span class="str">"structural"</span> <span class="kw">and</span> assessment[<span class="str">"has_clear_headers"</span>]:
+        splitter = <span class="fn">MarkdownHeaderTextSplitter</span>(
+            headers_to_split_on=[(<span class="str">"#"</span>, <span class="str">"h1"</span>), (<span class="str">"##"</span>, <span class="str">"h2"</span>)]
+        )
+        <span class="kw">return</span> splitter.<span class="fn">split_text</span>(document_text)
+
+    <span class="kw">elif</span> strategy == <span class="str">"propositional"</span>:
+        <span class="cm"># Extract propositions paragraph by paragraph</span>
+        paragraphs = [p <span class="kw">for</span> p <span class="kw">in</span> document_text.<span class="fn">split</span>(<span class="str">"\n\n"</span>) <span class="kw">if</span> p.<span class="fn">strip</span>()]
+        all_props = []
+        <span class="kw">for</span> para <span class="kw">in</span> paragraphs:
+            props = <span class="fn">extract_propositions</span>(para)
+            all_props.<span class="fn">extend</span>(props)
+        <span class="kw">return</span> all_props
+
+    <span class="kw">else</span>:
+        <span class="cm"># Default: recursive with agent-recommended chunk size</span>
+        size = assessment.<span class="fn">get</span>(<span class="str">"recommended_chunk_size"</span>, <span class="nb">512</span>)
+        splitter = <span class="fn">RecursiveCharacterTextSplitter</span>(
+            chunk_size=size, chunk_overlap=<span class="fn">int</span>(size * <span class="nb">0.12</span>)
+        )
+        <span class="kw">return</span> splitter.<span class="fn">split_text</span>(document_text)</code></pre>
+
+  <p>The agent does three things: it inspects the document, it selects a strategy, and it executes it. For a mixed corpus — say, 40% Markdown documentation, 30% scanned PDF reports, and 30% customer support emails — an agentic chunker applies the right tool to each document type without you hard-coding a routing layer.</p>
+
+  <div class="callout blue">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Production consideration:</strong> Run agentic chunking at index time, not query time. The LLM calls happen once per document during ingestion. Retrieval at query time remains fast — you are just querying the intelligently pre-chunked vector store. The cost is in indexing, not in serving.</div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- BENCHMARK TABLE -->
+  <h2>Benchmark — Strategies Side by Side</h2>
+
+  <p>Here is every strategy compared on dimensions that matter for engineering decisions. Numbers draw from the February 2026 Vecta benchmark (50 academic papers), MDPI Bioengineering November 2025, and Chroma's July 2025 context research.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th>Retrieval Accuracy</th>
+          <th>Indexing Cost</th>
+          <th>Chunk Consistency</th>
+          <th>Best Document Type</th>
+          <th>Framework Support</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Fixed-size recursive</strong></td>
+          <td class="mid">69% (Vecta)</td>
+          <td class="best">Very low</td>
+          <td class="best">High — predictable</td>
+          <td class="worst">Homogeneous text</td>
+          <td>LangChain, LlamaIndex, Haystack</td>
+        </tr>
+        <tr>
+          <td><strong>Semantic chunking</strong></td>
+          <td class="best">Up to ~70% lift vs naive</td>
+          <td class="mid">Medium (embed per sentence)</td>
+          <td class="mid">Variable chunk size</td>
+          <td>Knowledge bases, tech docs</td>
+          <td>LangChain Experimental, LlamaIndex</td>
+        </tr>
+        <tr>
+          <td><strong>Structural / header-based</strong></td>
+          <td class="best">High for structured docs</td>
+          <td class="best">Very low</td>
+          <td class="best">High — inherits doc structure</td>
+          <td class="best">Markdown, HTML, PDFs with headers</td>
+          <td>LangChain, LlamaIndex</td>
+        </tr>
+        <tr>
+          <td><strong>Propositional</strong></td>
+          <td class="best">Highest precision</td>
+          <td class="worst">High (LLM per paragraph)</td>
+          <td class="best">Very consistent (1 idea/chunk)</td>
+          <td>Legal, medical, research</td>
+          <td>Custom implementation</td>
+        </tr>
+        <tr>
+          <td><strong>Agentic chunking</strong></td>
+          <td class="highlight">87% adaptive (MDPI, 2025)</td>
+          <td class="worst">Highest (LLM per document)</td>
+          <td class="best">Optimal per doc type</td>
+          <td class="best">Heterogeneous corpora</td>
+          <td>Custom + Weaviate Elysia</td>
+        </tr>
+        <tr>
+          <td><strong>Page-level</strong></td>
+          <td>0.648 accuracy — NVIDIA 2024 benchmark winner</td>
+          <td class="best">Very low</td>
+          <td class="best">Consistent</td>
+          <td>Paginated PDFs only</td>
+          <td>LlamaIndex, custom PDF loaders</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ARCHITECTURE DIAGRAM -->
+  <h2>The Full Pipeline — Where Chunking Lives</h2>
+
+  <p>Chunking is one step in a larger pipeline. Here is where it sits relative to the other moving parts — and which layer to fix first when retrieval breaks.</p>
+
+  <div class="pipeline">
+    <div class="pipeline-label">Agentic RAG Pipeline — Ingestion and Retrieval Flow</div>
+    <svg width="100%" viewBox="0 0 680 310" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- INGESTION ROW -->
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" letter-spacing="0.1" x="40" y="30" font-weight="600">INGESTION PIPELINE</text>
+
+      <!-- Step boxes -->
+      <!-- Raw Docs -->
+      <rect x="40" y="42" width="100" height="48" rx="4" fill="#f0ece4" stroke="#c8c3b8" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="90" y="62" text-anchor="middle">Raw Docs</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="90" y="79" text-anchor="middle">PDF, MD, HTML</text>
+
+      <line x1="140" y1="66" x2="158" y2="66" stroke="#c44b2b" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Chunking (highlighted) -->
+      <rect x="160" y="36" width="108" height="60" rx="4" fill="#c44b2b" stroke="#c44b2b" stroke-width="0"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#fff" font-weight="700" x="214" y="60" text-anchor="middle">Chunking</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="rgba(255,255,255,0.7)" x="214" y="77" text-anchor="middle">← You are here</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="9" fill="rgba(255,255,255,0.55)" x="214" y="90" text-anchor="middle">80% of failures</text>
+
+      <line x1="268" y1="66" x2="286" y2="66" stroke="#c44b2b" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Embedding -->
+      <rect x="288" y="42" width="100" height="48" rx="4" fill="#f0ece4" stroke="#c8c3b8" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="338" y="62" text-anchor="middle">Embedding</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="338" y="79" text-anchor="middle">text-emb-3</text>
+
+      <line x1="388" y1="66" x2="406" y2="66" stroke="#9e9b93" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Vector Store -->
+      <rect x="408" y="42" width="100" height="48" rx="4" fill="#f0ece4" stroke="#c8c3b8" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="458" y="62" text-anchor="middle">Vector Store</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="458" y="79" text-anchor="middle">Pinecone/Qdrant</text>
+
+      <!-- RETRIEVAL ROW -->
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" letter-spacing="0.1" x="40" y="150" font-weight="600">QUERY / RETRIEVAL PIPELINE</text>
+
+      <!-- User Query -->
+      <rect x="40" y="162" width="100" height="48" rx="4" fill="#e8f0ea" stroke="#1a6b4a" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="90" y="182" text-anchor="middle">User Query</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="90" y="199" text-anchor="middle">natural language</text>
+
+      <line x1="140" y1="186" x2="158" y2="186" stroke="#1a6b4a" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Query Rewrite -->
+      <rect x="160" y="162" width="100" height="48" rx="4" fill="#f0ece4" stroke="#c8c3b8" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="210" y="182" text-anchor="middle">Rewrite</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="210" y="199" text-anchor="middle">HyDE / expand</text>
+
+      <line x1="260" y1="186" x2="278" y2="186" stroke="#9e9b93" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Retrieval -->
+      <rect x="280" y="162" width="100" height="48" rx="4" fill="#f0ece4" stroke="#c8c3b8" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="330" y="182" text-anchor="middle">Retrieval</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="330" y="199" text-anchor="middle">hybrid search</text>
+
+      <line x1="380" y1="186" x2="398" y2="186" stroke="#9e9b93" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Rerank -->
+      <rect x="400" y="162" width="100" height="48" rx="4" fill="#f0ece4" stroke="#c8c3b8" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="450" y="182" text-anchor="middle">Rerank</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="450" y="199" text-anchor="middle">cross-encoder</text>
+
+      <line x1="500" y1="186" x2="518" y2="186" stroke="#9e9b93" stroke-width="1" marker-end="url(#arr2)"/>
+
+      <!-- Generate -->
+      <rect x="520" y="162" width="100" height="48" rx="4" fill="#e8eef7" stroke="#2d5a8e" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="12" fill="#1a1916" font-weight="600" x="570" y="182" text-anchor="middle">Generate</text>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#9e9b93" x="570" y="199" text-anchor="middle">LLM + context</text>
+
+      <!-- Agentic loop arrow -->
+      <path d="M570 210 Q570 260 330 260 Q200 260 130 230" fill="none" stroke="#7a3b8c" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr2)" opacity="0.7"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="10" fill="#7a3b8c" x="340" y="278" text-anchor="middle">Agentic loop — re-retrieve if answer quality fails</text>
+
+      <!-- Context limit note -->
+      <rect x="40" y="248" width="175" height="28" rx="3" fill="rgba(232,160,32,0.1)" stroke="rgba(232,160,32,0.3)" stroke-width="0.5"/>
+      <text font-family="'Space Grotesk',sans-serif" font-size="11" fill="#8a6018" x="128" y="266" text-anchor="middle">Keep context &lt; 8K tokens</text>
+    </svg>
+  </div>
+
+  <p>The pipeline has two phases: ingestion (chunking → embedding → indexing) and retrieval (query → rewrite → retrieve → rerank → generate). Fix chunking and you improve every downstream step. A chunk that is semantically coherent embeds better, retrieves more precisely, and gives the LLM cleaner context to reason over.</p>
+
+  <hr class="divider">
+
+  <!-- CONTEXT CLIFF -->
+  <h2>The Context Cliff — Why Smaller Often Wins</h2>
+
+  <p>Here is a counterintuitive finding from Chroma's July 2025 research across 18 models including GPT-4.1, Claude 4, and Gemini 2.5: retrieval performance degrades as context length increases, even for models with million-token windows. A January 2026 systematic analysis identified a "context cliff" around 2,500 tokens where response quality drops sharply.</p>
+
+  <p>This is the "lost in the middle" effect. LLMs pay more attention to the beginning and end of their context window. Information buried in the middle of 50K tokens of retrieved text gets under-weighted. The model does not know it is missing something — it just produces a confident answer that misses the most relevant passage.</p>
+
+  <p>The practical rule: keep assembled context under 8K tokens per query. If you consistently hit that limit, your reranking threshold is too loose. Reduce the number of retrieved chunks or tighten the relevance score cutoff before generating. Fewer, better chunks beats more chunks every time.</p>
+
+  <hr class="divider">
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-text">The chunking question is actually a product question disguised as an infrastructure question. The right chunk size is not 512 tokens — it is whatever preserves the atomic unit of meaning your users are querying for. In a legal knowledge base, that unit is a clause. In an API docs site, it is a function signature plus its parameter table. In a clinical trial database, it is a single observation with its patient metadata. The developers who figure this out for their specific domain will build systems that actually work in production. The ones who cargo-cult a chunk size from a tutorial will spend months debugging mysterious retrieval failures.</div>
+    <div class="opinion-attr">— Personal take · Based on production RAG architecture patterns seen across 2024–2026</div>
+  </div>
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw a vertical ladder diagram with 4 rungs representing chunking strategies. Bottom rung (gray): 'Fixed-Size Recursive — 512 tokens, 10% overlap — Fast, predictable, good default'. Second rung (blue): 'Semantic Chunking — embed sentences, split on cosine drops — Up to 70% retrieval lift, higher compute'. Third rung (green): 'Structural / Propositional — header-based or LLM proposition extraction — Highest precision per chunk, expensive to index'. Top rung (red/orange): 'Agentic Chunking — LLM decides strategy per document — Best accuracy for mixed corpora, 3-5x indexing cost'. Add an arrow pointing up on the right labeled 'Accuracy ↑' and another arrow pointing up on the left labeled 'Cost ↑'. Show a person icon on the second rung with a label 'Most production systems live here'. Dark background, clean minimal style."
+  </div>
+
+  <hr class="divider">
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>Three Things to Take Away</h2>
+    <p>First: chunking quality sets the ceiling for your entire RAG system. You can tune your prompt, swap embedding models, and add a reranker — and all of those are worth doing — but if your chunks are semantically broken, none of it fixes the fundamental problem. Fix chunking first, measure retrieval accuracy, then optimize everything else.</p>
+    <p>Second: the ladder is real, but start at the bottom. Recursive splitting at 400–512 tokens with overlap is not a compromise — it is a production-proven default that wins benchmarks. Upgrade when you have retrieval metrics that show you need to. Do not agentic-chunk a homogeneous corpus of news articles. Do agentic-chunk a mixed enterprise knowledge base where document types vary wildly.</p>
+    <p>Third: the context cliff is real. Keep your assembled context under 8K tokens. Smaller, more precise context beats larger, noisier context for every model currently in production. The goal of chunking is not to preserve information — it is to surface exactly the right information at query time.</p>
+    <p style="margin-top:20px;color:var(--muted);font-size:15px;font-family:'Space Grotesk',sans-serif">The RAG market is growing at a 49% CAGR toward $11B by 2030. The teams that understand the full chunking ladder — and apply the right rung for their document type — will be the ones building the systems that actually work at that scale.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="cta-label">Action</div>
+    <div class="cta-text">Pick one RAG system you are building right now. Run Recall@5 and MRR against your current chunking setup. Then change only the chunking strategy to semantic or structural — do not touch anything else — and measure again. Share what you find. The data will tell you more than any benchmark.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <div class="discussion-q">
+      <strong>Discussion question —</strong> What chunking strategy are you using in production today, and what was the specific failure mode that pushed you to upgrade from the naive approach? Or are you still on fixed-size splitting — and is it actually working?
+    </div>
+  </div>
+
+  <!-- RELATED POSTS -->
+  <div class="related-label">Related posts to write next</div>
+  <div class="related-cards">
+    <div class="related-card">
+      <div class="related-card-tag">Tutorial</div>
+      <div class="related-card-title">Hybrid Search in Production — BM25 + Dense Retrieval + Reranking Without the Complexity Tax</div>
+    </div>
+    <div class="related-card">
+      <div class="related-card-tag">Deep-Dive</div>
+      <div class="related-card-title">Evaluating RAG Systems with RAGAS — Setting Up Recall, Faithfulness, and Answer Relevancy in CI</div>
+    </div>
+    <div class="related-card">
+      <div class="related-card-tag">Explainer</div>
+      <div class="related-card-title">GraphRAG vs Vector RAG — When Entity Relationships Matter More Than Semantic Similarity</div>
+    </div>
+  </div>
+
+  <!-- SEO -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row"><strong style="font-weight:600;color:var(--muted)">Primary keyword:</strong> agentic chunking RAG</div>
+    <div class="seo-row"><strong style="font-weight:600;color:var(--muted)">URL slug:</strong> <code>/blog/scaling-rag-naive-retrieval-to-agentic-chunking</code></div>
+    <div class="seo-row" style="margin-top:10px"><strong style="font-weight:600;color:var(--muted)">Secondary keywords:</strong></div>
+    <div class="tag-list" style="margin-bottom:16px">
+      <span class="seo-tag">RAG chunking strategies</span>
+      <span class="seo-tag">semantic chunking</span>
+      <span class="seo-tag">agentic RAG</span>
+      <span class="seo-tag">production RAG pipeline</span>
+      <span class="seo-tag">retrieval accuracy improvement</span>
+    </div>
+    <div class="seo-row"><strong style="font-weight:600;color:var(--muted)">Tags:</strong></div>
+    <div class="tag-list">
+      <span class="seo-tag">rag</span>
+      <span class="seo-tag">chunking</span>
+      <span class="seo-tag">llm</span>
+      <span class="seo-tag">retrieval</span>
+      <span class="seo-tag">langchain</span>
+      <span class="seo-tag">llamaindex</span>
+      <span class="seo-tag">agentic-ai</span>
+      <span class="seo-tag">vector-search</span>
+      <span class="seo-tag">ai-engineering</span>
+    </div>
+    <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;color:var(--dim);margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      Sources: MDPI Bioengineering Nov 2025 (adaptive chunking 87% accuracy) · Vecta Feb 2026 (7-strategy benchmark) · Chroma July 2025 (context cliff research) · Weaviate Chunking Strategies Guide · PremAI Production RAG Guide 2026 · LLM Practical Experience Hub (9 strategies tested) · Grand View Research RAG market data
+    </div>
+  </div>
+
+</main>
+
+</body>
+</html>
