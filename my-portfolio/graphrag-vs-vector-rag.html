@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphRAG vs Vector RAG — When Entity Relationships Matter More</title>
+<meta name="description" content="GraphRAG beats Vector RAG in 4 specific scenarios. Learn when entity relationships outperform semantic similarity — with diagrams, examples, and code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --surface2: #1a1e2a;
+    --border: #252a38;
+    --accent: #4fffb0;
+    --accent2: #7c6fff;
+    --accent3: #ff6b6b;
+    --text: #e8eaf0;
+    --muted: #7a8099;
+    --heading-font: 'Syne', sans-serif;
+    --body-font: 'Source Serif 4', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body-font);
+    font-size: 18px;
+    line-height: 1.75;
+  }
+
+  /* HERO */
+  .hero {
+    position: relative;
+    min-height: 520px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hero-bg {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 70% 40%, rgba(76,255,176,0.07) 0%, transparent 70%),
+                radial-gradient(ellipse 60% 80% at 10% 80%, rgba(124,111,255,0.07) 0%, transparent 60%),
+                var(--bg);
+  }
+
+  .hero-grid {
+    position: absolute; inset: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+  }
+
+  .hero-content {
+    position: relative;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 80px 40px;
+  }
+
+  .tag {
+    display: inline-block;
+    background: rgba(76,255,176,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(76,255,176,0.3);
+    font-family: var(--heading-font);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    border-radius: 2px;
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-family: var(--heading-font);
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+    color: #fff;
+  }
+
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-family: var(--heading-font);
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .hero-meta span { display: flex; align-items: center; gap: 6px; }
+
+  /* LAYOUT */
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 40px;
+  }
+
+  article {
+    padding: 60px 0 100px;
+  }
+
+  /* TYPOGRAPHY */
+  h2 {
+    font-family: var(--heading-font);
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 64px 0 20px;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  h3 {
+    font-family: var(--heading-font);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 36px 0 14px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+  }
+
+  p { margin-bottom: 22px; color: #c8ccda; }
+
+  strong { color: var(--text); font-weight: 600; }
+
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(76,255,176,0.3); }
+
+  /* TL;DR */
+  .tldr {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 28px 32px;
+    margin: 40px 0;
+  }
+
+  .tldr-title {
+    font-family: var(--heading-font);
+    font-weight: 800;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  .tldr ul { list-style: none; padding: 0; }
+
+  .tldr ul li {
+    padding: 6px 0 6px 22px;
+    position: relative;
+    color: #c8ccda;
+    font-size: 0.95rem;
+  }
+
+  .tldr ul li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* CALLOUT */
+  .callout {
+    background: rgba(124,111,255,0.07);
+    border: 1px solid rgba(124,111,255,0.25);
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin: 32px 0;
+    font-size: 0.95rem;
+    color: #c8ccda;
+  }
+
+  .callout.warn {
+    background: rgba(255,107,107,0.07);
+    border-color: rgba(255,107,107,0.25);
+  }
+
+  .callout.tip {
+    background: rgba(76,255,176,0.05);
+    border-color: rgba(76,255,176,0.2);
+  }
+
+  .callout strong { color: #fff; }
+
+  /* CODE */
+  pre {
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 28px;
+    overflow-x: auto;
+    margin: 28px 0;
+    font-size: 0.82rem;
+    line-height: 1.7;
+  }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.85em;
+    color: #a8b4d0;
+  }
+
+  pre code { color: #c8d0e8; }
+
+  .code-comment { color: #4a5568; }
+  .code-keyword { color: var(--accent2); }
+  .code-string { color: var(--accent); }
+  .code-fn { color: #ffd68a; }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; margin: 32px 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    font-family: var(--heading-font);
+  }
+
+  th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 14px 18px;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+  }
+
+  td {
+    padding: 13px 18px;
+    border-bottom: 1px solid var(--border);
+    color: #c8ccda;
+    vertical-align: top;
+  }
+
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  td:first-child { color: #fff; font-weight: 600; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+
+  .badge.green { background: rgba(76,255,176,0.15); color: var(--accent); }
+  .badge.red { background: rgba(255,107,107,0.15); color: var(--accent3); }
+  .badge.yellow { background: rgba(255,214,107,0.15); color: #ffd66b; }
+
+  /* DIAGRAM SECTION */
+  .diagram-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 40px;
+    margin: 40px 0;
+  }
+
+  .diagram-title {
+    font-family: var(--heading-font);
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 28px;
+    text-align: center;
+  }
+
+  /* SVG DIAGRAM 1: Architecture Comparison */
+  svg text { font-family: var(--heading-font); }
+
+  /* OPINION */
+  .opinion {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 32px 36px;
+    margin: 48px 0;
+    background: var(--surface);
+    position: relative;
+  }
+
+  .opinion::before {
+    content: '"';
+    position: absolute;
+    top: -20px;
+    left: 28px;
+    font-family: var(--heading-font);
+    font-size: 5rem;
+    color: var(--accent2);
+    opacity: 0.4;
+    line-height: 1;
+  }
+
+  .opinion p { font-size: 1.1rem; font-style: italic; color: var(--text); }
+
+  .opinion-credit {
+    margin-top: 16px;
+    font-family: var(--heading-font);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  /* CTA */
+  .cta-box {
+    background: linear-gradient(135deg, rgba(76,255,176,0.07), rgba(124,111,255,0.07));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 40px 44px;
+    margin: 64px 0 0;
+    text-align: center;
+  }
+
+  .cta-box h3 {
+    font-family: var(--heading-font);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 12px;
+    text-transform: none;
+    letter-spacing: -0.01em;
+  }
+
+  .cta-box p { font-size: 0.95rem; margin-bottom: 24px; }
+
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #0d0f14;
+    font-family: var(--heading-font);
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 14px 32px;
+    border-radius: 3px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  .btn:hover { opacity: 0.85; }
+
+  /* RELATED */
+  .related { margin-top: 56px; }
+
+  .related h3 {
+    font-family: var(--heading-font);
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .related-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    font-family: var(--heading-font);
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .related-card:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* SEO CHECKLIST */
+  .seo-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px 28px;
+    margin-top: 48px;
+    font-size: 0.82rem;
+  }
+
+  .seo-box h3 {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .seo-box dl { display: grid; grid-template-columns: 140px 1fr; gap: 8px 16px; }
+  .seo-box dt { color: var(--muted); font-family: var(--heading-font); font-weight: 700; }
+  .seo-box dd { color: var(--accent); font-family: 'SF Mono', monospace; }
+
+  /* DISCUSSION */
+  .discussion {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 32px;
+    margin-top: 40px;
+  }
+
+  .discussion h3 {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .discussion p { font-size: 1rem; color: var(--text); font-style: italic; margin: 0; }
+
+  /* DIVIDER */
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+
+  /* SECTION LABEL */
+  .section-label {
+    font-family: var(--heading-font);
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 640px) {
+    .container { padding: 0 20px; }
+    .hero-content { padding: 60px 20px; }
+    .diagram-section { padding: 20px; }
+    h1 { font-size: 1.9rem; }
+    .seo-box dl { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="tag">Deep Dive · AI Engineering</div>
+    <h1>GraphRAG vs Vector RAG —<br><em>When Relationships Beat Similarity</em></h1>
+    <div class="hero-meta">
+      <span>⏱ 12 min read</span>
+      <span>📅 April 2026</span>
+      <span>🎯 AI Engineers & Intermediate Devs</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+<article>
+
+<!-- INTRO -->
+<p style="margin-top:48px;">You embed your documents. You build a vector store. Your RAG pipeline works great — until a user asks, <em>"Which of our clients share a vendor with a competitor?"</em> And your system hands back a paragraph about supply chains from a 2019 whitepaper.</p>
+
+<p>Vector RAG is not broken. It's just not designed for that question. Semantic similarity finds text that <em>sounds</em> related. It cannot trace a chain of named entities across five documents. That's a graph problem — and GraphRAG is built to solve it.</p>
+
+<p>The debate isn't "which one is better." It's about knowing when to deploy which weapon. Get this wrong and you'll spend months optimizing the wrong retrieval architecture. Get it right and your AI system answers questions other RAG pipelines can't even parse.</p>
+
+<p>In this post you'll learn exactly how GraphRAG works under the hood, how it compares to Vector RAG on 5 dimensions, and the 4 question types where GraphRAG wins every time — with real code examples for both approaches.</p>
+
+<!-- TL;DR -->
+<div class="tldr">
+  <div class="tldr-title">⚡ TL;DR — Key Takeaways</div>
+  <ul>
+    <li>Vector RAG retrieves by semantic similarity; GraphRAG retrieves by entity relationships.</li>
+    <li>GraphRAG shines on multi-hop reasoning, relationship queries, and structured knowledge domains.</li>
+    <li>Microsoft's GraphRAG library (released 2024) makes knowledge graph extraction production-ready.</li>
+    <li>The real-world sweet spot: combine both — use Vector RAG for unstructured text, GraphRAG for entity-heavy domains.</li>
+    <li>GraphRAG costs more to build but returns dramatically better results on 4 specific query types.</li>
+  </ul>
+</div>
+
+<!-- BACKGROUND -->
+<h2>The Mental Model: Two Different Libraries</h2>
+
+<p>Think of Vector RAG as a <strong>librarian who reads every book and remembers feelings.</strong> Ask "something about conflict in the Middle East" and they'll hand you related texts — fast, fuzzy, and surprisingly good for open-ended questions.</p>
+
+<p>GraphRAG is a <strong>librarian who built a relationship map.</strong> They know that <em>Company A</em> acquired <em>Startup B</em>, which was co-founded by <em>Person C</em>, who also sits on the board of <em>Competitor D</em>. Ask a relationship question and they trace the graph — not the text.</p>
+
+<p>This distinction matters enormously in 2025-2026. Enterprise AI deployments are moving from generic chatbots to domain-specific agents that operate over private knowledge: legal contracts, financial filings, drug interaction databases, and internal org charts. These domains are <em>relationship-dense</em>. Vector RAG alone simply cannot serve them.</p>
+
+<!-- DIAGRAM 1: Architecture Comparison -->
+<div class="diagram-section">
+  <div class="diagram-title">Figure 1 — Retrieval Architecture: Vector RAG vs GraphRAG</div>
+  <svg viewBox="0 0 780 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:780px;display:block;margin:0 auto;">
+    <defs>
+      <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#4fffb0" opacity="0.7"/>
+      </marker>
+      <marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#7c6fff" opacity="0.7"/>
+      </marker>
+    </defs>
+
+    <!-- LEFT SIDE — Vector RAG -->
+    <text x="190" y="26" text-anchor="middle" fill="#4fffb0" font-size="11" font-weight="700" letter-spacing="2" font-family="Syne,sans-serif">VECTOR RAG</text>
+
+    <!-- Docs -->
+    <rect x="30" y="44" width="100" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="80" y="58" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">Raw Docs</text>
+    <text x="80" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">PDF / Text</text>
+
+    <!-- Chunker -->
+    <rect x="148" y="44" width="84" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="190" y="58" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">Chunker</text>
+    <text x="190" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">512 tokens</text>
+
+    <!-- Embedder -->
+    <rect x="250" y="44" width="84" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="292" y="58" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">Embedder</text>
+    <text x="292" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">text-embed-3</text>
+
+    <!-- Vector DB -->
+    <rect x="352" y="44" width="84" height="38" rx="4" fill="#1a1e2a" stroke="rgba(76,255,176,0.4)"/>
+    <text x="394" y="58" text-anchor="middle" fill="#4fffb0" font-size="11" font-family="Syne,sans-serif">Vector DB</text>
+    <text x="394" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">Pinecone / Qdrant</text>
+
+    <!-- Arrows top row -->
+    <line x1="130" y1="63" x2="146" y2="63" stroke="#4fffb0" stroke-width="1.5" opacity="0.5" marker-end="url(#arr)"/>
+    <line x1="232" y1="63" x2="248" y2="63" stroke="#4fffb0" stroke-width="1.5" opacity="0.5" marker-end="url(#arr)"/>
+    <line x1="334" y1="63" x2="350" y2="63" stroke="#4fffb0" stroke-width="1.5" opacity="0.5" marker-end="url(#arr)"/>
+
+    <!-- Query flow -->
+    <rect x="30" y="130" width="100" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="80" y="144" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">User Query</text>
+    <text x="80" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">natural language</text>
+
+    <rect x="148" y="130" width="84" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="190" y="144" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">Embed Query</text>
+    <text x="190" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">dense vector</text>
+
+    <rect x="250" y="130" width="84" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="292" y="144" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">ANN Search</text>
+    <text x="292" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">cosine sim</text>
+
+    <rect x="352" y="130" width="84" height="38" rx="4" fill="#1a1e2a" stroke="rgba(76,255,176,0.4)"/>
+    <text x="394" y="144" text-anchor="middle" fill="#4fffb0" font-size="11" font-family="Syne,sans-serif">Top-K Chunks</text>
+    <text x="394" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">→ LLM prompt</text>
+
+    <line x1="130" y1="149" x2="146" y2="149" stroke="#4fffb0" stroke-width="1.5" opacity="0.5" marker-end="url(#arr)"/>
+    <line x1="232" y1="149" x2="248" y2="149" stroke="#4fffb0" stroke-width="1.5" opacity="0.5" marker-end="url(#arr)"/>
+    <line x1="334" y1="149" x2="350" y2="149" stroke="#4fffb0" stroke-width="1.5" opacity="0.5" marker-end="url(#arr)"/>
+
+    <!-- DIVIDER -->
+    <line x1="460" y1="20" x2="460" y2="320" stroke="#252a38" stroke-width="1" stroke-dasharray="5,5"/>
+
+    <!-- RIGHT SIDE — GraphRAG -->
+    <text x="622" y="26" text-anchor="middle" fill="#7c6fff" font-size="11" font-weight="700" letter-spacing="2" font-family="Syne,sans-serif">GRAPHRAG</text>
+
+    <!-- Entity Extraction -->
+    <rect x="476" y="44" width="96" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="524" y="58" text-anchor="middle" fill="#c8ccda" font-size="10" font-family="Syne,sans-serif">Entity Extract</text>
+    <text x="524" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">LLM-powered</text>
+
+    <!-- Relationship -->
+    <rect x="584" y="44" width="90" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="629" y="58" text-anchor="middle" fill="#c8ccda" font-size="10" font-family="Syne,sans-serif">Relation Map</text>
+    <text x="629" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">triplets</text>
+
+    <!-- Graph Store -->
+    <rect x="686" y="44" width="80" height="38" rx="4" fill="#1a1e2a" stroke="rgba(124,111,255,0.5)"/>
+    <text x="726" y="58" text-anchor="middle" fill="#7c6fff" font-size="10" font-family="Syne,sans-serif">Graph DB</text>
+    <text x="726" y="73" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">Neo4j</text>
+
+    <line x1="572" y1="63" x2="582" y2="63" stroke="#7c6fff" stroke-width="1.5" opacity="0.5" marker-end="url(#arr2)"/>
+    <line x1="674" y1="63" x2="684" y2="63" stroke="#7c6fff" stroke-width="1.5" opacity="0.5" marker-end="url(#arr2)"/>
+
+    <!-- Graph Query Flow -->
+    <rect x="476" y="130" width="96" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="524" y="144" text-anchor="middle" fill="#c8ccda" font-size="10" font-family="Syne,sans-serif">NL → Cypher</text>
+    <text x="524" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">query gen</text>
+
+    <rect x="584" y="130" width="90" height="38" rx="4" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="629" y="144" text-anchor="middle" fill="#c8ccda" font-size="10" font-family="Syne,sans-serif">Graph Traverse</text>
+    <text x="629" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">multi-hop</text>
+
+    <rect x="686" y="130" width="80" height="38" rx="4" fill="#1a1e2a" stroke="rgba(124,111,255,0.5)"/>
+    <text x="726" y="144" text-anchor="middle" fill="#7c6fff" font-size="10" font-family="Syne,sans-serif">Subgraph</text>
+    <text x="726" y="159" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">→ LLM prompt</text>
+
+    <line x1="572" y1="149" x2="582" y2="149" stroke="#7c6fff" stroke-width="1.5" opacity="0.5" marker-end="url(#arr2)"/>
+    <line x1="674" y1="149" x2="684" y2="149" stroke="#7c6fff" stroke-width="1.5" opacity="0.5" marker-end="url(#arr2)"/>
+
+    <!-- KEY DIFFERENCE note -->
+    <rect x="476" y="215" width="290" height="80" rx="6" fill="rgba(124,111,255,0.06)" stroke="rgba(124,111,255,0.2)"/>
+    <text x="621" y="235" text-anchor="middle" fill="#7c6fff" font-size="9" font-weight="700" letter-spacing="2" font-family="Syne,sans-serif">KEY DIFFERENCE</text>
+    <text x="621" y="253" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">GraphRAG traverses named entity</text>
+    <text x="621" y="269" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">connections — not word vectors.</text>
+    <text x="621" y="285" text-anchor="middle" fill="#7a8099" font-size="9.5" font-family="Syne,sans-serif">A→B→C is a path, not a similarity score.</text>
+
+    <!-- KEY DIFFERENCE note left -->
+    <rect x="30" y="215" width="320" height="80" rx="6" fill="rgba(76,255,176,0.04)" stroke="rgba(76,255,176,0.15)"/>
+    <text x="190" y="235" text-anchor="middle" fill="#4fffb0" font-size="9" font-weight="700" letter-spacing="2" font-family="Syne,sans-serif">KEY DIFFERENCE</text>
+    <text x="190" y="253" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">Vector RAG finds semantically</text>
+    <text x="190" y="269" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif">similar text chunks to the query.</text>
+    <text x="190" y="285" text-anchor="middle" fill="#7a8099" font-size="9.5" font-family="Syne,sans-serif">No structural knowledge. Just proximity.</text>
+  </svg>
+</div>
+
+<!-- SECTION 1 -->
+<h2>How Vector RAG Actually Works Under the Hood</h2>
+
+<p>Vector RAG has 3 stages: index, embed, retrieve.</p>
+
+<p><strong>Indexing:</strong> You split your documents into chunks — usually 512 tokens with some overlap. Each chunk becomes a unit of retrieval. The chunk size is a critical design decision. Too small and you lose context. Too big and you dilute the signal.</p>
+
+<p><strong>Embedding:</strong> Each chunk gets passed through an embedding model (OpenAI's <code>text-embedding-3-large</code>, Cohere Embed v3, or a local model via Ollama). The model outputs a dense vector — typically 1536 dimensions — that encodes semantic meaning.</p>
+
+<p><strong>Retrieval:</strong> At query time, you embed the user question with the same model. Then you run an Approximate Nearest Neighbor (ANN) search against your vector store (Pinecone, Qdrant, Weaviate, pgvector). The top-K most similar chunks get stuffed into the LLM prompt as context.</p>
+
+<div class="callout tip">
+  <strong>💡 Key Insight:</strong> The entire power of Vector RAG lives in one assumption — <em>semantically similar text contains the answer</em>. When that assumption breaks (relationship questions, multi-hop reasoning), retrieval quality collapses fast.
+</div>
+
+<p>Here's the core retrieval logic in Python using LangChain:</p>
+
+<pre><code><span class="code-comment"># Vector RAG retrieval — simple but powerful for semantic queries</span>
+<span class="code-keyword">from</span> langchain_openai <span class="code-keyword">import</span> OpenAIEmbeddings
+<span class="code-keyword">from</span> langchain_community.vectorstores <span class="code-keyword">import</span> Qdrant
+<span class="code-keyword">from</span> langchain_core.prompts <span class="code-keyword">import</span> ChatPromptTemplate
+
+embeddings = <span class="code-fn">OpenAIEmbeddings</span>(model=<span class="code-string">"text-embedding-3-large"</span>)
+
+<span class="code-comment"># Load your pre-built vector store</span>
+vectorstore = Qdrant.from_existing_collection(
+    embeddings=embeddings,
+    collection_name=<span class="code-string">"company_docs"</span>,
+    url=<span class="code-string">"http://localhost:6333"</span>
+)
+
+<span class="code-comment"># Retrieve top-5 semantically similar chunks</span>
+retriever = vectorstore.<span class="code-fn">as_retriever</span>(
+    search_type=<span class="code-string">"similarity"</span>,
+    search_kwargs={<span class="code-string">"k"</span>: 5}
+)
+
+<span class="code-comment"># This works great for: "What is our refund policy?"</span>
+<span class="code-comment"># This fails badly for: "Which vendors appear in both Client A and Client B contracts?"</span>
+results = retriever.<span class="code-fn">invoke</span>(<span class="code-string">"What is our refund policy?"</span>)</code></pre>
+
+<p>The comment on the last line tells the whole story. The moment your query requires structured cross-document reasoning, vector similarity becomes the wrong tool.</p>
+
+<!-- SECTION 2 -->
+<h2>How GraphRAG Builds and Traverses a Knowledge Graph</h2>
+
+<p>GraphRAG has 5 stages: extract, map, store, translate, traverse.</p>
+
+<p><strong>Entity Extraction:</strong> An LLM reads your documents and pulls out named entities — people, organizations, products, locations, dates, concepts. This step is expensive but only runs once during indexing.</p>
+
+<p><strong>Relationship Mapping:</strong> The same LLM identifies relationships between entities and stores them as triplets: <code>(Subject, Relationship, Object)</code>. Example: <code>(OpenAI, acquired, Rockset)</code>, <code>(Sam Altman, CEO_of, OpenAI)</code>.</p>
+
+<p><strong>Graph Storage:</strong> Triplets load into a graph database — Neo4j is the most common choice. Microsoft's GraphRAG library also supports a lightweight local option using NetworkX for smaller datasets.</p>
+
+<p><strong>Query Translation:</strong> At inference time, the user's natural language question gets translated into a Cypher query (Neo4j's query language) or a graph traversal plan.</p>
+
+<p><strong>Subgraph Retrieval:</strong> The graph returns a subgraph — the relevant entities and relationships. This subgraph gets serialized as text and passed to the LLM as context.</p>
+
+<div class="callout">
+  <strong>💡 Key Insight:</strong> Microsoft open-sourced their GraphRAG library in July 2024. It handles entity extraction and community detection automatically using GPT-4. The indexing pipeline is the hardest part — their library makes it production-usable for the first time.
+</div>
+
+<p>Here's what entity extraction looks like using Microsoft's GraphRAG:</p>
+
+<pre><code><span class="code-comment"># GraphRAG indexing with Microsoft's library</span>
+<span class="code-comment"># Install: pip install graphrag</span>
+
+<span class="code-keyword">import</span> asyncio
+<span class="code-keyword">from</span> graphrag.index <span class="code-keyword">import</span> run_pipeline_with_config
+<span class="code-keyword">from</span> graphrag.config <span class="code-keyword">import</span> create_graphrag_config
+
+<span class="code-comment"># Config points to your docs folder and OpenAI key</span>
+config = <span class="code-fn">create_graphrag_config</span>(
+    root_dir=<span class="code-string">"./input"</span>,
+    llm_model=<span class="code-string">"gpt-4o"</span>,
+    embedding_model=<span class="code-string">"text-embedding-3-small"</span>
+)
+
+<span class="code-comment"># This runs entity extraction + relationship mapping + community detection</span>
+<span class="code-comment"># Expensive at index time. Cheap at query time.</span>
+asyncio.<span class="code-fn">run</span>(run_pipeline_with_config(config))
+
+<span class="code-comment"># After indexing, query with global or local search</span>
+<span class="code-keyword">from</span> graphrag.query.cli <span class="code-keyword">import</span> run_global_search
+
+result = asyncio.<span class="code-fn">run</span>(
+    <span class="code-fn">run_global_search</span>(
+        root_dir=<span class="code-string">"./input"</span>,
+        query=<span class="code-string">"Which organizations have a shared leadership relationship?"</span>
+    )
+)
+<span class="code-fn">print</span>(result.response)
+<span class="code-comment"># Returns entity-grounded answer with relationship chain as evidence</span></code></pre>
+
+<p>The key architectural difference: GraphRAG's answer comes with a <strong>traceable path</strong> through the knowledge graph. You can audit exactly which entity relationships drove the response. Vector RAG gives you chunks — GraphRAG gives you reasoning chains.</p>
+
+<!-- DIAGRAM 2: Multi-hop Query Flow -->
+<div class="diagram-section">
+  <div class="diagram-title">Figure 2 — Multi-Hop Query: "Find all companies connected to Person X within 2 hops"</div>
+  <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;">
+    <defs>
+      <marker id="garr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#7c6fff" opacity="0.8"/>
+      </marker>
+    </defs>
+
+    <!-- Central node: Person X -->
+    <circle cx="350" cy="150" r="40" fill="rgba(124,111,255,0.15)" stroke="#7c6fff" stroke-width="2"/>
+    <text x="350" y="146" text-anchor="middle" fill="#fff" font-size="12" font-weight="700" font-family="Syne,sans-serif">Person X</text>
+    <text x="350" y="162" text-anchor="middle" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">START NODE</text>
+
+    <!-- Hop 1 nodes -->
+    <circle cx="160" cy="80" r="34" fill="rgba(76,255,176,0.1)" stroke="rgba(76,255,176,0.5)" stroke-width="1.5"/>
+    <text x="160" y="76" text-anchor="middle" fill="#4fffb0" font-size="10" font-weight="700" font-family="Syne,sans-serif">Company A</text>
+    <text x="160" y="90" text-anchor="middle" fill="#7a8099" font-size="8" font-family="Syne,sans-serif">CEO of</text>
+
+    <circle cx="540" cy="80" r="34" fill="rgba(76,255,176,0.1)" stroke="rgba(76,255,176,0.5)" stroke-width="1.5"/>
+    <text x="540" y="76" text-anchor="middle" fill="#4fffb0" font-size="10" font-weight="700" font-family="Syne,sans-serif">Company B</text>
+    <text x="540" y="90" text-anchor="middle" fill="#7a8099" font-size="8" font-family="Syne,sans-serif">Board member</text>
+
+    <circle cx="160" cy="230" r="34" fill="rgba(76,255,176,0.1)" stroke="rgba(76,255,176,0.5)" stroke-width="1.5"/>
+    <text x="160" y="226" text-anchor="middle" fill="#4fffb0" font-size="10" font-weight="700" font-family="Syne,sans-serif">Startup C</text>
+    <text x="160" y="240" text-anchor="middle" fill="#7a8099" font-size="8" font-family="Syne,sans-serif">Founded</text>
+
+    <!-- Hop 1 arrows -->
+    <line x1="316" y1="122" x2="196" y2="100" stroke="#7c6fff" stroke-width="1.5" opacity="0.7" marker-end="url(#garr)"/>
+    <line x1="386" y1="122" x2="510" y2="100" stroke="#7c6fff" stroke-width="1.5" opacity="0.7" marker-end="url(#garr)"/>
+    <line x1="318" y1="170" x2="194" y2="218" stroke="#7c6fff" stroke-width="1.5" opacity="0.7" marker-end="url(#garr)"/>
+
+    <!-- Hop 2 nodes -->
+    <circle cx="60" cy="150" r="28" fill="rgba(255,107,107,0.08)" stroke="rgba(255,107,107,0.35)" stroke-width="1.5"/>
+    <text x="60" y="146" text-anchor="middle" fill="#ff6b6b" font-size="9" font-weight="700" font-family="Syne,sans-serif">Vendor D</text>
+    <text x="60" y="160" text-anchor="middle" fill="#7a8099" font-size="7.5" font-family="Syne,sans-serif">supplies A</text>
+
+    <circle cx="640" cy="150" r="28" fill="rgba(255,107,107,0.08)" stroke="rgba(255,107,107,0.35)" stroke-width="1.5"/>
+    <text x="640" y="146" text-anchor="middle" fill="#ff6b6b" font-size="9" font-weight="700" font-family="Syne,sans-serif">Investor E</text>
+    <text x="640" y="160" text-anchor="middle" fill="#7a8099" font-size="7.5" font-family="Syne,sans-serif">funds B</text>
+
+    <circle cx="270" cy="268" r="28" fill="rgba(255,107,107,0.08)" stroke="rgba(255,107,107,0.35)" stroke-width="1.5"/>
+    <text x="270" y="264" text-anchor="middle" fill="#ff6b6b" font-size="9" font-weight="700" font-family="Syne,sans-serif">Product F</text>
+    <text x="270" y="278" text-anchor="middle" fill="#7a8099" font-size="7.5" font-family="Syne,sans-serif">built by C</text>
+
+    <!-- Hop 2 arrows -->
+    <line x1="126" y1="102" x2="84" y2="130" stroke="rgba(255,107,107,0.5)" stroke-width="1" stroke-dasharray="4,3"/>
+    <line x1="572" y1="102" x2="618" y2="130" stroke="rgba(255,107,107,0.5)" stroke-width="1" stroke-dasharray="4,3"/>
+    <line x1="183" y1="252" x2="244" y2="263" stroke="rgba(255,107,107,0.5)" stroke-width="1" stroke-dasharray="4,3"/>
+
+    <!-- Legend -->
+    <line x1="30" y1="290" x2="55" y2="290" stroke="#7c6fff" stroke-width="2"/>
+    <text x="60" y="294" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">Hop 1 (direct)</text>
+    <line x1="160" y1="290" x2="185" y2="290" stroke="rgba(255,107,107,0.5)" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="190" y="294" fill="#7a8099" font-size="9" font-family="Syne,sans-serif">Hop 2 (indirect) — Vector RAG misses these entirely</text>
+  </svg>
+</div>
+
+<!-- SECTION 3 -->
+<h2>4 Query Types Where GraphRAG Wins Every Time</h2>
+
+<p>These are the 4 situations where Vector RAG breaks down and GraphRAG delivers. Recognize them early — choosing the wrong architecture wastes months.</p>
+
+<h3>1 — Multi-Hop Reasoning Queries</h3>
+<p><em>"Who are all the suppliers of companies that received funding from Investor X in the last 2 years?"</em></p>
+<p>This needs 3 hops: Investor → Companies → Suppliers → Timeframe filter. Vector RAG will find documents that mention investing and suppliers. It won't trace the chain. GraphRAG traverses <code>FUNDED_BY → SUPPLIES → date filter</code> in one Cypher query.</p>
+
+<h3>2 — Relationship Existence Queries</h3>
+<p><em>"Is there a shared vendor between Company A and Company B?"</em></p>
+<p>No text chunk contains this answer explicitly. The relationship emerges from the graph structure. Vector retrieval cannot assemble cross-document entity relationships from chunk similarities.</p>
+
+<h3>3 — Aggregation Over Entities</h3>
+<p><em>"How many contracts mention Vendor X and what is the total value?"</em></p>
+<p>Vector RAG might retrieve some relevant chunks. It won't sum across all contracts reliably. GraphRAG can: the graph stores contract-vendor relationships with metadata, and Cypher handles aggregation natively.</p>
+
+<h3>4 — Community / Cluster Detection</h3>
+<p><em>"Which group of researchers in our corpus most often co-author papers together?"</em></p>
+<p>This is a network analysis problem. Microsoft's GraphRAG runs the Leiden community detection algorithm on your entity graph. It identifies clusters automatically during indexing. No equivalent exists in Vector RAG.</p>
+
+<div class="callout warn">
+  <strong>⚠️ Warning:</strong> Don't assume GraphRAG is always better. For open-domain QA on unstructured content ("Summarize our customer feedback from Q3"), Vector RAG is faster, cheaper, and more accurate. Use the query type to pick the tool.
+</div>
+
+<!-- COMPARISON TABLE -->
+<h2>GraphRAG vs Vector RAG: Head-to-Head Comparison</h2>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Dimension</th>
+      <th>Vector RAG</th>
+      <th>GraphRAG</th>
+      <th>Winner</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Setup Complexity</td>
+      <td>Low — embed and store</td>
+      <td>High — LLM extraction needed</td>
+      <td><span class="badge green">Vector</span></td>
+    </tr>
+    <tr>
+      <td>Index Cost</td>
+      <td>~$0.002 / 1K tokens</td>
+      <td>~$2–$8 / 1M tokens (GPT-4o)</td>
+      <td><span class="badge green">Vector</span></td>
+    </tr>
+    <tr>
+      <td>Query Latency</td>
+      <td>20–80ms (ANN search)</td>
+      <td>100–600ms (graph traverse)</td>
+      <td><span class="badge green">Vector</span></td>
+    </tr>
+    <tr>
+      <td>Multi-hop Reasoning</td>
+      <td>Poor — loses chain logic</td>
+      <td>Excellent — native traversal</td>
+      <td><span class="badge yellow">Graph</span></td>
+    </tr>
+    <tr>
+      <td>Relationship Queries</td>
+      <td>Fails on implicit links</td>
+      <td>First-class citizen</td>
+      <td><span class="badge yellow">Graph</span></td>
+    </tr>
+    <tr>
+      <td>Answer Traceability</td>
+      <td>Chunk references only</td>
+      <td>Full entity path</td>
+      <td><span class="badge yellow">Graph</span></td>
+    </tr>
+    <tr>
+      <td>Open-Domain QA</td>
+      <td>Excellent</td>
+      <td>Moderate</td>
+      <td><span class="badge green">Vector</span></td>
+    </tr>
+    <tr>
+      <td>Hallucination Risk</td>
+      <td>Moderate</td>
+      <td>Lower (entity-grounded)</td>
+      <td><span class="badge yellow">Graph</span></td>
+    </tr>
+    <tr>
+      <td>Incremental Updates</td>
+      <td>Easy — add chunks</td>
+      <td>Requires re-extraction</td>
+      <td><span class="badge green">Vector</span></td>
+    </tr>
+    <tr>
+      <td>Best For</td>
+      <td>FAQ, summarization, general QA</td>
+      <td>Legal, medical, financial, org data</td>
+      <td><span class="badge yellow">Depends</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- HYBRID SECTION -->
+<h2>The Hybrid Approach: When to Combine Both</h2>
+
+<p>The most powerful production systems don't choose one. They route.</p>
+
+<p>A query classifier — a simple LLM call or a fine-tuned classifier — detects the query type and routes it to the right retrieval engine. Relationship and multi-hop queries go to GraphRAG. Open-ended semantic queries go to Vector RAG. The results merge before the final LLM prompt.</p>
+
+<p>LlamaIndex calls this a "Router Query Engine." LangGraph makes it trivial to implement as a conditional node in your agent graph. Here's the routing logic in pseudocode:</p>
+
+<pre><code><span class="code-comment"># Hybrid RAG router — simplified logic</span>
+<span class="code-keyword">def</span> <span class="code-fn">route_query</span>(query: str) -> str:
+    classifier_prompt = <span class="code-string">f"""
+    Classify this query as one of:
+    - 'relationship': asks about connections between entities
+    - 'semantic': asks for information or summaries
+    
+    Query: {query}
+    Answer with just the label.
+    """</span>
+    label = llm.<span class="code-fn">invoke</span>(classifier_prompt).strip()
+    <span class="code-keyword">return</span> label
+
+<span class="code-keyword">def</span> <span class="code-fn">retrieve</span>(query: str) -> str:
+    route = <span class="code-fn">route_query</span>(query)
+    
+    <span class="code-keyword">if</span> route == <span class="code-string">"relationship"</span>:
+        <span class="code-keyword">return</span> graphrag_retriever.<span class="code-fn">invoke</span>(query)  <span class="code-comment"># Neo4j traversal</span>
+    <span class="code-keyword">else</span>:
+        <span class="code-keyword">return</span> vector_retriever.<span class="code-fn">invoke</span>(query)    <span class="code-comment"># Qdrant ANN search</span></code></pre>
+
+<div class="callout tip">
+  <strong>💡 Pro Tip:</strong> Start with Vector RAG. Only add GraphRAG when users hit a class of questions your vector system consistently fails. Building GraphRAG indexing upfront on speculative use cases is an expensive mistake.
+</div>
+
+<!-- DIAGRAM 3: Hybrid Router -->
+<div class="diagram-section">
+  <div class="diagram-title">Figure 3 — Hybrid RAG: Query Router Architecture</div>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;">
+    <defs>
+      <marker id="harr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#c8ccda" opacity="0.6"/>
+      </marker>
+      <marker id="harr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#4fffb0" opacity="0.8"/>
+      </marker>
+      <marker id="harr3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#7c6fff" opacity="0.8"/>
+      </marker>
+    </defs>
+
+    <!-- User Query -->
+    <rect x="30" y="96" width="100" height="48" rx="5" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="80" y="116" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif" font-weight="600">User</text>
+    <text x="80" y="132" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif" font-weight="600">Query</text>
+    <line x1="130" y1="120" x2="176" y2="120" stroke="#c8ccda" stroke-width="1.5" opacity="0.4" marker-end="url(#harr)"/>
+
+    <!-- Router -->
+    <rect x="178" y="84" width="110" height="72" rx="5" fill="#13161e" stroke="#ffd66b" stroke-width="1.5"/>
+    <text x="233" y="110" text-anchor="middle" fill="#ffd66b" font-size="10" font-weight="700" letter-spacing="1" font-family="Syne,sans-serif">QUERY</text>
+    <text x="233" y="126" text-anchor="middle" fill="#ffd66b" font-size="10" font-weight="700" letter-spacing="1" font-family="Syne,sans-serif">ROUTER</text>
+    <text x="233" y="146" text-anchor="middle" fill="#7a8099" font-size="8.5" font-family="Syne,sans-serif">LLM classifier</text>
+
+    <!-- Arrow to Vector RAG -->
+    <line x1="288" y1="104" x2="356" y2="72" stroke="#4fffb0" stroke-width="1.5" opacity="0.7" marker-end="url(#harr2)"/>
+    <text x="316" y="80" fill="#4fffb0" font-size="8.5" font-family="Syne,sans-serif">semantic</text>
+
+    <!-- Arrow to GraphRAG -->
+    <line x1="288" y1="136" x2="356" y2="170" stroke="#7c6fff" stroke-width="1.5" opacity="0.7" marker-end="url(#harr3)"/>
+    <text x="312" y="162" fill="#7c6fff" font-size="8.5" font-family="Syne,sans-serif">relationship</text>
+
+    <!-- Vector RAG Box -->
+    <rect x="358" y="40" width="120" height="55" rx="5" fill="rgba(76,255,176,0.07)" stroke="rgba(76,255,176,0.4)"/>
+    <text x="418" y="63" text-anchor="middle" fill="#4fffb0" font-size="11" font-weight="700" font-family="Syne,sans-serif">Vector RAG</text>
+    <text x="418" y="82" text-anchor="middle" fill="#7a8099" font-size="8.5" font-family="Syne,sans-serif">Qdrant · semantic sim</text>
+
+    <!-- GraphRAG Box -->
+    <rect x="358" y="148" width="120" height="55" rx="5" fill="rgba(124,111,255,0.07)" stroke="rgba(124,111,255,0.4)"/>
+    <text x="418" y="171" text-anchor="middle" fill="#7c6fff" font-size="11" font-weight="700" font-family="Syne,sans-serif">GraphRAG</text>
+    <text x="418" y="190" text-anchor="middle" fill="#7a8099" font-size="8.5" font-family="Syne,sans-serif">Neo4j · entity paths</text>
+
+    <!-- Merge -->
+    <rect x="510" y="96" width="80" height="48" rx="5" fill="#1a1e2a" stroke="#252a38"/>
+    <text x="550" y="116" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif" font-weight="600">Context</text>
+    <text x="550" y="132" text-anchor="middle" fill="#c8ccda" font-size="11" font-family="Syne,sans-serif" font-weight="600">Merge</text>
+
+    <!-- Arrows to merge -->
+    <line x1="478" y1="72" x2="508" y2="108" stroke="#4fffb0" stroke-width="1" opacity="0.4" marker-end="url(#harr2)"/>
+    <line x1="478" y1="172" x2="508" y2="136" stroke="#7c6fff" stroke-width="1" opacity="0.4" marker-end="url(#harr3)"/>
+
+    <!-- LLM -->
+    <rect x="614" y="96" width="72" height="48" rx="5" fill="#1a1e2a" stroke="#ffd66b" stroke-width="1"/>
+    <text x="650" y="116" text-anchor="middle" fill="#ffd66b" font-size="11" font-family="Syne,sans-serif" font-weight="600">LLM</text>
+    <text x="650" y="132" text-anchor="middle" fill="#7a8099" font-size="8.5" font-family="Syne,sans-serif">GPT-4o</text>
+    <line x1="590" y1="120" x2="612" y2="120" stroke="#c8ccda" stroke-width="1.5" opacity="0.4" marker-end="url(#harr)"/>
+  </svg>
+</div>
+
+<!-- EXPERT OPINION -->
+<div class="opinion">
+  <p>GraphRAG will become the default architecture for enterprise RAG within 18 months — but not because it's always better. It'll win because the questions enterprises actually care about are almost all relationship questions. "Which regulations apply to which products in which markets?" "Which employees have access to which systems?" "Which clients share risk exposure through shared counterparties?" Vector RAG was built for the internet. GraphRAG is built for the enterprise.</p>
+  <div class="opinion-credit">— Author's Take · April 2026</div>
+</div>
+
+<!-- CONCLUSION -->
+<h2>Conclusion: Pick Your Weapon Based on the Question Type</h2>
+
+<p>The 3 things to take away from this post:</p>
+
+<p><strong>1. Similarity ≠ Structure.</strong> Vector RAG finds semantically related text. It cannot traverse entity relationships. The moment your user's question requires tracing a chain of named entities across documents, you need a graph.</p>
+
+<p><strong>2. GraphRAG has a real cost.</strong> The indexing pipeline requires LLM calls per document. Microsoft's GraphRAG library costs roughly $2–$8 per million tokens to index with GPT-4o. Budget this before committing to the architecture.</p>
+
+<p><strong>3. The hybrid is the endgame.</strong> Production systems route queries to the right engine. Build Vector RAG first. Add GraphRAG when your failure mode analysis shows consistent breakdowns on relationship queries. The router is cheap; the wrong architecture is not.</p>
+
+<p>The next wave of enterprise AI agents won't just search your documents — they'll navigate your organizational knowledge graph. The teams that build the graph now will have a 12-month head start on the ones who don't.</p>
+
+<!-- CTA -->
+<div class="cta-box">
+  <h3>Building a RAG system right now?</h3>
+  <p>Subscribe for weekly deep-dives on AI Engineering — covering LangGraph, GraphRAG, agent architectures, and production RAG patterns every week.</p>
+  <a href="#" class="btn">Subscribe for Weekly AI Updates</a>
+</div>
+
+<!-- DISCUSSION -->
+<div class="discussion">
+  <h3>💬 Discussion Question</h3>
+  <p>Are you using GraphRAG in production yet — and if so, what domain pushed you to build the knowledge graph? If not, what's holding you back from the switch?</p>
+</div>
+
+<!-- RELATED -->
+<div class="related">
+  <h3>📖 Related Posts to Write Next</h3>
+  <div class="related-grid">
+    <div class="related-card">LangGraph vs CrewAI: Which Agent Framework Handles Complex Workflows?</div>
+    <div class="related-card">Building a Production RAG Pipeline in 2025: The Complete Architecture Guide</div>
+    <div class="related-card">Neo4j for AI Engineers: Knowledge Graphs Without the PhD</div>
+  </div>
+</div>
+
+<!-- SEO CHECKLIST -->
+<div class="seo-box">
+  <h3>🔍 SEO CHECKLIST</h3>
+  <dl>
+    <dt>Primary Keyword</dt>
+    <dd>GraphRAG vs Vector RAG</dd>
+    <dt>Secondary Keywords</dt>
+    <dd>knowledge graph retrieval, entity relationship RAG, Microsoft GraphRAG, multi-hop reasoning LLM</dd>
+    <dt>URL Slug</dt>
+    <dd>/blog/graphrag-vs-vector-rag-when-relationships-matter</dd>
+    <dt>Tags</dt>
+    <dd>RAG, GraphRAG, LLM, AI Engineering, Knowledge Graphs, LangChain, Neo4j, Vector Databases</dd>
+  </dl>
+</div>
+
+<hr>
+
+<p style="font-size:0.82rem;color:var(--muted);text-align:center;font-family:var(--heading-font);">
+  Tools referenced: Microsoft GraphRAG · LangChain · LlamaIndex · Neo4j · Qdrant · Pinecone · OpenAI · GPT-4o · NetworkX
+</p>
+
+</article>
+</div>
+</body>
+</html>

@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLMs Don't Have Memory — So How Do They Remember? (Complete Guide 2026)</title>
+<meta name="description" content="Every LLM starts fresh. No memory of you, your preferences, or your last conversation. So how do AI assistants remember anything at all? Here's the complete engineering answer.">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface2: #f2f0ec;
+  --ink: #18181b;
+  --ink2: #3f3f46;
+  --muted: #71717a;
+  --dim: #a1a1aa;
+  --border: #e4e4e7;
+  --border2: #d4d4d8;
+
+  --brain: #6366f1;     /* indigo — "brain / internal" */
+  --brain-soft: rgba(99,102,241,0.08);
+  --brain-border: rgba(99,102,241,0.25);
+
+  --context: #0ea5e9;   /* sky — "context window" */
+  --context-soft: rgba(14,165,233,0.08);
+  --context-border: rgba(14,165,233,0.25);
+
+  --ext: #10b981;       /* emerald — "external / long-term" */
+  --ext-soft: rgba(16,185,129,0.08);
+  --ext-border: rgba(16,185,129,0.25);
+
+  --warn: #f59e0b;
+  --warn-soft: rgba(245,158,11,0.08);
+  --warn-border: rgba(245,158,11,0.25);
+
+  --danger: #ef4444;
+  --code-bg: #1e1e2e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.78;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER BAND ── */
+.header-band {
+  background: var(--ink);
+  padding: 18px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.brand {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.04em;
+}
+.brand span { color: var(--brain); }
+.issue-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: rgba(255,255,255,0.35);
+}
+
+/* ── HERO ── */
+.hero {
+  background: var(--ink);
+  color: #fff;
+  padding: 80px 40px 72px;
+}
+.hero-inner { max-width: 780px; margin: 0 auto; }
+.hero-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--brain);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 24px;
+  display: flex; align-items: center; gap: 10px;
+}
+.hero-eyebrow::after {
+  content: ''; width: 40px; height: 1px; background: var(--brain);
+}
+
+h1 {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: clamp(38px, 6vw, 62px);
+  font-weight: 400;
+  line-height: 1.07;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  margin-bottom: 28px;
+}
+h1 .italic { font-style: italic; color: var(--brain); }
+
+.hero-lead {
+  font-size: 19px; font-weight: 300;
+  color: rgba(255,255,255,0.65);
+  max-width: 640px; line-height: 1.7;
+  margin-bottom: 36px;
+}
+
+.hero-chips {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; padding: 4px 12px; border-radius: 2px;
+  border: 1px solid;
+}
+.chip.brain { color: var(--brain); border-color: var(--brain); background: rgba(99,102,241,0.1); }
+.chip.context { color: var(--context); border-color: var(--context); background: rgba(14,165,233,0.1); }
+.chip.ext { color: var(--ext); border-color: var(--ext); background: rgba(16,185,129,0.1); }
+.chip.neutral { color: var(--dim); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); }
+
+.hero-meta {
+  margin-top: 32px;
+  font-size: 13px; color: rgba(255,255,255,0.35);
+  font-family: 'DM Sans', sans-serif;
+  display: flex; gap: 16px; flex-wrap: wrap;
+}
+
+/* ── MAIN ── */
+.main { max-width: 780px; margin: 0 auto; padding: 0 40px 120px; }
+
+/* ── TYPOGRAPHY ── */
+h2 {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 32px; font-weight: 400;
+  color: var(--ink); line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 72px 0 20px;
+}
+h2 .italic { font-style: italic; }
+h3 {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 18px; font-weight: 600;
+  color: var(--ink2);
+  margin: 36px 0 10px;
+}
+p { margin-bottom: 22px; color: var(--ink2); }
+p strong { color: var(--ink); font-weight: 600; }
+a { color: var(--brain); text-decoration: underline; text-underline-offset: 2px; }
+hr.div { border: none; border-top: 1px solid var(--border); margin: 56px 0; }
+
+/* ── TL;DR ── */
+.tldr {
+  border: 1px solid var(--brain-border);
+  background: var(--brain-soft);
+  border-radius: 8px;
+  padding: 28px 30px;
+  margin: 40px 0;
+}
+.tldr-head {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--brain); margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.tldr-head::after { content: ''; flex: 1; height: 1px; background: var(--brain-border); }
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-size: 15px; color: var(--ink);
+  padding-left: 22px; position: relative; line-height: 1.6;
+}
+.tldr li::before { content: '→'; position: absolute; left: 0; color: var(--brain); font-weight: 500; }
+
+/* ── CALLOUT ── */
+.callout {
+  border-radius: 6px; padding: 16px 20px;
+  margin: 28px 0; display: flex; gap: 14px;
+  border: 1px solid;
+}
+.callout.insight { background: var(--brain-soft); border-color: var(--brain-border); }
+.callout.warning { background: var(--warn-soft); border-color: var(--warn-border); }
+.callout.tip { background: var(--ext-soft); border-color: var(--ext-border); }
+.callout.info { background: var(--context-soft); border-color: var(--context-border); }
+.callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 15px; line-height: 1.65; color: var(--ink2); }
+.callout-body strong { color: var(--ink); }
+
+/* ── THE AMNESIA BOX ── */
+.amnesia-box {
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 36px 32px;
+  margin: 40px 0;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.amnesia-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px; color: #fff; font-style: italic;
+}
+.amnesia-slots {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.amnesia-slot {
+  flex: 1; min-width: 160px;
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.12);
+  border-radius: 6px; padding: 16px 14px;
+}
+.amnesia-slot.alive {
+  border-color: rgba(99,102,241,0.5);
+  background: rgba(99,102,241,0.08);
+}
+.amnesia-slot-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 6px;
+}
+.amnesia-slot.alive .amnesia-slot-label { color: var(--brain); }
+.amnesia-slot-val {
+  font-size: 14px; color: rgba(255,255,255,0.5);
+}
+.amnesia-slot.alive .amnesia-slot-val { color: rgba(255,255,255,0.9); font-weight: 500; }
+
+/* ── MEMORY TYPE CARDS ── */
+.mem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px; margin: 28px 0;
+}
+.mem-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px; padding: 22px 20px;
+  position: relative; overflow: hidden;
+}
+.mem-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; width: 4px; bottom: 0;
+  border-radius: 8px 0 0 8px;
+}
+.mem-card.parametric::before { background: var(--brain); }
+.mem-card.context-win::before { background: var(--context); }
+.mem-card.episodic::before { background: var(--ext); }
+.mem-card.semantic-ext::before { background: var(--warn); }
+
+.mem-type-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.mem-card.parametric .mem-type-label { color: var(--brain); }
+.mem-card.context-win .mem-type-label { color: var(--context); }
+.mem-card.episodic .mem-type-label { color: var(--ext); }
+.mem-card.semantic-ext .mem-type-label { color: var(--warn); }
+
+.mem-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: 20px; color: var(--ink);
+  margin-bottom: 8px; line-height: 1.25;
+}
+.mem-analogy {
+  font-size: 13px; color: var(--muted); font-style: italic;
+  margin-bottom: 10px;
+}
+.mem-desc {
+  font-size: 14px; color: var(--ink2); line-height: 1.6;
+}
+
+/* ── CONTEXT WINDOW VISUAL ── */
+.ctx-visual {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 28px 24px;
+  margin: 32px 0;
+  overflow-x: auto;
+}
+.ctx-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--muted);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+/* ── CODE ── */
+pre {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 22px 24px;
+  overflow-x: auto;
+  margin: 24px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; line-height: 1.75;
+  color: #cdd6f4;
+}
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13.5px; color: var(--brain);
+  background: var(--brain-soft);
+  border: 1px solid var(--brain-border);
+  padding: 1px 6px; border-radius: 4px;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+.kw { color: #cba6f7; }
+.fn { color: #89dceb; }
+.str { color: #a6e3a1; }
+.cm { color: #6c7086; font-style: italic; }
+.nb { color: #fab387; }
+.cl { color: #f9e2af; }
+
+/* ── LETTA OS DIAGRAM ── */
+.letta-layers {
+  border: 1px solid var(--border2);
+  border-radius: 8px; overflow: hidden;
+  margin: 28px 0;
+}
+.letta-layer {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 20px;
+}
+.letta-layer:last-child { border-bottom: none; }
+.letta-layer.active { background: var(--brain-soft); }
+.letta-layer-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; flex-shrink: 0;
+  width: 100px;
+}
+.letta-layer.l1 .letta-layer-badge { color: var(--danger); }
+.letta-layer.l2 .letta-layer-badge { color: var(--brain); }
+.letta-layer.l3 .letta-layer-badge { color: var(--context); }
+.letta-layer.l4 .letta-layer-badge { color: var(--ext); }
+.letta-layer-name { font-size: 15px; font-weight: 600; color: var(--ink); flex-shrink: 0; width: 180px; }
+.letta-layer-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.letta-layer-size {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--dim);
+  margin-left: auto; flex-shrink: 0;
+}
+
+/* ── COMPARISON TABLE ── */
+.table-wrap { overflow-x: auto; margin: 28px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  background: var(--ink); color: #fff;
+  text-align: left; padding: 11px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  color: var(--ink2); line-height: 1.5; vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+tr:nth-child(even) td { background: var(--surface2); }
+td.good { color: var(--ext); font-weight: 500; }
+td.bad { color: var(--danger); }
+td.mid { color: var(--warn); }
+td.code { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--brain); }
+
+/* ── COST INSIGHT ── */
+.cost-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 24px 24px;
+  margin: 28px 0;
+  display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;
+}
+.cost-metric {
+  flex: 1; min-width: 160px;
+  text-align: center;
+  padding: 16px; background: var(--surface2); border-radius: 6px;
+}
+.cost-num {
+  font-family: 'DM Serif Display', serif;
+  font-size: 36px; color: var(--ink); line-height: 1.1; margin-bottom: 6px;
+}
+.cost-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+/* ── OPINION ── */
+.opinion {
+  position: relative; margin: 56px 0;
+  padding: 32px 36px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+}
+.opinion-mark {
+  font-family: 'DM Serif Display', serif;
+  font-size: 72px; line-height: 1;
+  color: var(--brain); opacity: 0.2;
+  position: absolute; top: 12px; left: 24px;
+}
+.opinion-text {
+  font-family: 'DM Serif Display', serif;
+  font-size: 21px; font-style: italic;
+  color: var(--ink); line-height: 1.55;
+  margin-bottom: 16px; padding-top: 16px;
+}
+.opinion-attr {
+  font-size: 13px; color: var(--dim);
+}
+
+/* ── CONCLUSION ── */
+.conclusion {
+  background: var(--ink);
+  color: #fff;
+  border-radius: 10px;
+  padding: 40px 36px;
+  margin: 56px 0 40px;
+}
+.conclusion h2 {
+  color: #fff; margin-top: 0;
+  font-family: 'DM Serif Display', serif;
+}
+.conclusion p { color: rgba(255,255,255,0.72); }
+.conclusion p strong { color: #fff; }
+
+/* ── CTA ── */
+.cta {
+  border: 2px solid var(--brain);
+  border-radius: 8px;
+  padding: 28px 28px;
+  margin: 32px 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cta-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--brain); letter-spacing: 0.1em; text-transform: uppercase;
+}
+.cta-text { font-size: 16px; line-height: 1.6; color: var(--ink2); }
+
+/* ── DISCUSSION ── */
+.discussion {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 22px 22px; margin: 36px 0;
+}
+.discussion p { margin: 0; font-size: 15px; color: var(--ink2); }
+.discussion p strong { color: var(--ink); }
+
+/* ── RELATED ── */
+.related-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 14px; margin-top: 52px; display: block;
+}
+.related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.related-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px; padding: 16px 16px;
+  transition: border-color 0.2s;
+}
+.related-card:hover { border-color: var(--brain); }
+.rc-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--ext);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
+}
+.rc-title { font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.4; }
+
+/* ── SEO ── */
+.seo-block {
+  border-top: 1px solid var(--border);
+  margin-top: 64px; padding-top: 28px;
+}
+.seo-block h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 14px; border: none; margin-top: 0;
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.seo-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--brain);
+  background: var(--brain-soft);
+  border: 1px solid var(--brain-border);
+  padding: 3px 10px; border-radius: 3px;
+}
+.seo-row {
+  font-size: 13px; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; margin-bottom: 8px;
+}
+.seo-row strong { font-weight: 500; color: var(--ink2); }
+
+/* ── EXCALI ── */
+.excali {
+  background: var(--surface2);
+  border: 1px dashed var(--border2);
+  border-radius: 6px; padding: 20px 20px; margin: 28px 0;
+  font-size: 14px; color: var(--muted); line-height: 1.7;
+}
+.excali strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--brain); display: block; margin-bottom: 8px;
+}
+
+@media (max-width:600px) {
+  .hero { padding: 56px 20px 52px; }
+  h1 { font-size: 34px; }
+  h2 { font-size: 26px; }
+  .main { padding: 0 20px 80px; }
+  .header-band { padding: 14px 20px; }
+  .letta-layer { flex-direction: column; gap: 6px; }
+  .letta-layer-name { width: auto; }
+  .letta-layer-size { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER BAND -->
+<header class="header-band">
+  <div class="brand">Agentic AI Engineering <span>// Memory Systems</span></div>
+  <div class="issue-tag">Issue #13 · April 2026</div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Explainer · AI Fundamentals</div>
+    <h1>LLMs Don't Have Memory.<br>So How Do They <span class="italic">Remember?</span></h1>
+    <div class="hero-lead">Every time you start a new chat with an AI, it has no idea who you are. It does not remember your name, your last project, or even the conversation you had five minutes ago in a different tab. And yet — somehow — AI assistants seem to remember things. Here is how that trick actually works.</div>
+    <div class="hero-chips">
+      <span class="chip brain">Parametric Memory</span>
+      <span class="chip context">Context Window</span>
+      <span class="chip ext">External Memory</span>
+      <span class="chip neutral">Agentic Memory</span>
+    </div>
+    <div class="hero-meta">
+      <span>Krishil Agrawal</span>
+      <span>·</span>
+      <span>15 min read · ~3,200 words</span>
+      <span>·</span>
+      <span>For: intermediate devs + curious AI users</span>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- INTRO -->
+  <p style="margin-top: 52px;">You ask ChatGPT or Claude a question. It answers perfectly, referencing context from three messages back. You think: "it remembered." But if you open a new browser tab and start a fresh conversation, all of that is gone. The model does not know you. It has no recollection of anything you discussed. You are a stranger.</p>
+
+  <p>This is not a bug. It is not an oversight. It is the fundamental architecture of how Large Language Models work. LLMs are <strong>stateless functions</strong>. They take tokens in. They produce tokens out. Between one invocation and the next, they retain nothing. Every call is mathematically identical to the first call ever made to that model.</p>
+
+  <p>So how does it feel like the model is remembering? How does your AI coding assistant know your preferred language? How does a customer support bot remember your ticket number from last week? The answer is not memory inside the model — it is a carefully engineered illusion of memory built around the model. Understanding exactly how that illusion works is one of the most practically useful things you can know as an AI developer.</p>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-head">TL;DR</div>
+    <ul>
+      <li>LLMs are stateless. Every call starts fresh — the model itself stores nothing between conversations. What looks like memory is always injected into the context window.</li>
+      <li>There are 4 types of memory in modern AI systems: Parametric (baked into weights), In-context (the active window), Episodic (conversation history retrieved from external storage), and Semantic (knowledge stored in vector databases).</li>
+      <li>The context window is your model's only true working memory. Everything else — RAG, summaries, external databases — is just pre-loading the right information into that window before the model reads it.</li>
+      <li>Long-context models (1M+ tokens) reduce but do not eliminate the need for external memory. At 100K context length, external memory systems become more cost-efficient than long-context models after roughly 10 conversation turns.</li>
+      <li>Agentic memory — where the agent itself decides what to store, recall, and forget — is the current frontier. A-MEM (NeurIPS 2025) showed state-of-the-art results using Zettelkasten-style interconnected memory networks.</li>
+    </ul>
+  </div>
+
+  <hr class="div">
+
+  <!-- THE AMNESIA MODEL -->
+  <h2>The <span class="italic">Goldfish</span> Problem: Why LLMs Forget by Design</h2>
+
+  <p>Imagine you have a brilliant consultant. They know everything about software engineering — 20 years of accumulated knowledge stored in their head. But they have a condition: they cannot form new memories. Every meeting starts from scratch. They bring their expertise, but not their history with you.</p>
+
+  <p>That is exactly how an LLM works. The "20 years of knowledge" is parametric memory — baked into the model's weights during training. That knowledge is permanent and enormous. But <strong>anything that happens during a conversation? Gone the moment the session ends.</strong> Not stored. Not referenced. Mathematically unreachable.</p>
+
+  <div class="amnesia-box">
+    <div class="amnesia-title">Every new conversation — the model's state</div>
+    <div class="amnesia-slots">
+      <div class="amnesia-slot">
+        <div class="amnesia-slot-label">Your name</div>
+        <div class="amnesia-slot-val">— unknown —</div>
+      </div>
+      <div class="amnesia-slot">
+        <div class="amnesia-slot-label">Last conversation</div>
+        <div class="amnesia-slot-val">— unknown —</div>
+      </div>
+      <div class="amnesia-slot">
+        <div class="amnesia-slot-label">Your preferences</div>
+        <div class="amnesia-slot-val">— unknown —</div>
+      </div>
+      <div class="amnesia-slot">
+        <div class="amnesia-slot-label">Your project context</div>
+        <div class="amnesia-slot-val">— unknown —</div>
+      </div>
+      <div class="amnesia-slot alive">
+        <div class="amnesia-slot-label">Training knowledge</div>
+        <div class="amnesia-slot-val">Everything up to training cutoff — intact</div>
+      </div>
+    </div>
+  </div>
+
+  <p>The model's weights encode a vast compression of the training data. That knowledge does not disappear between calls. What disappears is <em>everything that happened after training</em> — including your entire conversation history with that model. It is the difference between long-term memory and working memory, and LLMs only natively have the former.</p>
+
+  <div class="callout warning">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-body"><strong>Common misconception:</strong> "The model remembers what I said earlier in this conversation." It does not. It can <em>read</em> what you said earlier because earlier messages are included in the current context window. The moment that window closes, none of it persists. There is no background process saving your conversation to the model's weights.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- 4 MEMORY TYPES -->
+  <h2>The 4 Types of Memory in Modern AI Systems</h2>
+
+  <p>Before we look at how memory is engineered around LLMs, we need a shared vocabulary. There are 4 distinct memory types in modern AI architectures. Each stores different information. Each is accessed differently. And each has different performance and cost characteristics.</p>
+
+  <div class="mem-grid">
+    <div class="mem-card parametric">
+      <div class="mem-type-label">Type 1 · Parametric</div>
+      <div class="mem-name">Weights Memory</div>
+      <div class="mem-analogy">Like a person's education and expertise</div>
+      <div class="mem-desc">Knowledge encoded into the model's billions of parameters during training. Includes language, reasoning, facts, code, and common sense. Fixed after training — you cannot update it at runtime without fine-tuning.</div>
+    </div>
+    <div class="mem-card context-win">
+      <div class="mem-type-label">Type 2 · In-Context</div>
+      <div class="mem-name">Context Window</div>
+      <div class="mem-analogy">Like your current train of thought</div>
+      <div class="mem-desc">The active working memory. Every token currently visible to the model — system prompt, conversation history, retrieved documents, tool outputs. Finite, expensive, and temporary. Cleared at session end.</div>
+    </div>
+    <div class="mem-card episodic">
+      <div class="mem-type-label">Type 3 · Episodic</div>
+      <div class="mem-name">Conversation History</div>
+      <div class="mem-analogy">Like a diary you read before each meeting</div>
+      <div class="mem-desc">Past conversations stored externally — in a database, vector store, or summary cache. Retrieved and injected into the context window before the model reads them. The model does not "remember" them; it reads them fresh each time.</div>
+    </div>
+    <div class="mem-card semantic-ext">
+      <div class="mem-type-label">Type 4 · Semantic</div>
+      <div class="mem-name">External Knowledge</div>
+      <div class="mem-analogy">Like a library your assistant can search</div>
+      <div class="mem-desc">Domain knowledge, documents, and facts stored in vector databases or knowledge graphs. Retrieved via similarity search or graph traversal. The foundation of RAG systems. Completely external to the model's weights.</div>
+    </div>
+  </div>
+
+  <p>Most real AI applications use all 4 types simultaneously. The model provides parametric memory. The system prompt and chat history provide in-context memory. A conversation history database provides episodic memory. A vector store provides semantic memory. The art is deciding which memory type to use for which problem.</p>
+
+  <hr class="div">
+
+  <!-- THE CONTEXT WINDOW -->
+  <h2>The Context Window: <span class="italic">The Only Memory That Is Real</span></h2>
+
+  <p>Here is the one fact that makes all AI memory engineering make sense: <strong>the context window is the only thing the model can actually see.</strong> Everything else — conversation history, retrieved documents, user preferences, external databases — only matters if it gets injected into the context window before the model generates a response.</p>
+
+  <p>This is not a limitation being worked around. It is the mechanism. Every "memory" system for LLMs is fundamentally a system for deciding: what do we put into this context window right now, for this specific query?</p>
+
+  <div class="ctx-visual">
+    <div class="ctx-label">Anatomy of a context window — what actually reaches the model</div>
+    <svg width="100%" viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- Main context window rectangle -->
+      <rect x="260" y="30" width="390" height="260" rx="8"
+        fill="rgba(14,165,233,0.05)" stroke="rgba(14,165,233,0.4)" stroke-width="1"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="rgba(14,165,233,0.8)" x="350" y="20" letter-spacing="0.08">CONTEXT WINDOW (finite tokens)</text>
+
+      <!-- Sections inside context window -->
+      <rect x="268" y="38" width="374" height="44" rx="4" fill="rgba(99,102,241,0.12)" stroke="rgba(99,102,241,0.3)" stroke-width="0.5"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="11" fill="rgba(99,102,241,0.9)" x="278" y="58" font-weight="500">System Prompt</text>
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="#71717a" x="278" y="74">instructions, persona, user preferences</text>
+
+      <rect x="268" y="90" width="374" height="44" rx="4" fill="rgba(16,185,129,0.1)" stroke="rgba(16,185,129,0.3)" stroke-width="0.5"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="11" fill="rgba(16,185,129,0.9)" x="278" y="110" font-weight="500">Retrieved Memory</text>
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="#71717a" x="278" y="126">past conversations, facts, documents (from external stores)</text>
+
+      <rect x="268" y="142" width="374" height="44" rx="4" fill="rgba(245,158,11,0.1)" stroke="rgba(245,158,11,0.3)" stroke-width="0.5"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="11" fill="rgba(245,158,11,0.9)" x="278" y="162" font-weight="500">Current Conversation</text>
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="#71717a" x="278" y="178">all messages in this session so far</text>
+
+      <rect x="268" y="194" width="374" height="44" rx="4" fill="rgba(239,68,68,0.1)" stroke="rgba(239,68,68,0.3)" stroke-width="0.5"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="11" fill="rgba(239,68,68,0.9)" x="278" y="214" font-weight="500">Tool Results</text>
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="#71717a" x="278" y="230">API calls, code execution, search results</text>
+
+      <rect x="268" y="246" width="374" height="36" rx="4" fill="rgba(14,165,233,0.12)" stroke="rgba(14,165,233,0.4)" stroke-width="0.5"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="11" fill="rgba(14,165,233,0.9)" x="278" y="270" font-weight="500">Current User Query</text>
+
+      <!-- LLM box -->
+      <rect x="40" y="130" width="140" height="60" rx="6" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.5)" stroke-width="1"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="12" fill="#6366f1" x="110" y="156" text-anchor="middle" font-weight="500">LLM</text>
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="#71717a" x="110" y="173" text-anchor="middle">(reads context only)</text>
+
+      <!-- Arrow: context → LLM (reads) -->
+      <line x1="258" y1="160" x2="182" y2="160" stroke="rgba(14,165,233,0.6)" stroke-width="1.2" marker-end="url(#arrm)"/>
+      <text font-family="'JetBrains Mono',monospace" font-size="9" fill="#71717a" x="210" y="154" text-anchor="middle">reads</text>
+
+      <!-- Token limit warning -->
+      <text font-family="'JetBrains Mono',monospace" font-size="10" fill="#f59e0b" x="456" y="298" text-anchor="middle">⚠ token budget finite — choose carefully</text>
+    </svg>
+  </div>
+
+  <p>Every token in the context window costs money at inference time. That budget is finite. The model with 200K context tokens sounds enormous, but fill it with irrelevant conversation history and the model's effective reasoning quality drops. The research term for this is <strong>"context poisoning"</strong> — irrelevant or stale information in the context actively degrades response quality.</p>
+
+  <div class="callout info">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Context window sizes in 2026:</strong> Claude supports 200K tokens. Gemini 2.5 Pro reaches 2M tokens. GPT-4.5 provides 256K tokens. These numbers are real, but filling them entirely is rarely optimal. Retrieval-augmented context — where only the relevant subset of a large document set is injected — consistently outperforms "stuff everything in" approaches.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- HOW MEMORY IS ENGINEERED -->
+  <h2>How AI Memory Is <span class="italic">Actually</span> Engineered</h2>
+
+  <p>Now we get to the practical part. If the model has no memory, and everything must go through the context window, then memory engineering is the discipline of deciding what gets injected into that window — and when, and how much of it.</p>
+
+  <p>There are 3 principal techniques. Every production AI system uses some combination of them.</p>
+
+  <h3>Technique 1 — Full History Injection (Simple but Limited)</h3>
+
+  <p>The simplest approach: append every previous message to the current context. The model reads the entire conversation every time. This works perfectly up to the context limit, then fails catastrophically when the conversation grows too long to fit.</p>
+
+<pre><code><span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
+
+client = Anthropic()
+conversation_history = []   <span class="cm"># grows with every turn</span>
+
+<span class="kw">def</span> <span class="fn">chat</span>(user_message: str) -> str:
+    conversation_history.append({
+        <span class="str">"role"</span>: <span class="str">"user"</span>,
+        <span class="str">"content"</span>: user_message
+    })
+
+    response = client.messages.create(
+        model=<span class="str">"claude-sonnet-4-6"</span>,
+        max_tokens=<span class="nb">1024</span>,
+        system=<span class="str">"You are a helpful assistant."</span>,
+        messages=conversation_history   <span class="cm"># ALL history, every time</span>
+    )
+
+    assistant_message = response.content[<span class="nb">0</span>].text
+    conversation_history.append({
+        <span class="str">"role"</span>: <span class="str">"assistant"</span>,
+        <span class="str">"content"</span>: assistant_message
+    })
+    <span class="kw">return</span> assistant_message
+
+<span class="cm"># Works great for short sessions.
+# Fails when conversation_history exceeds the context window.
+# Cost grows linearly with every turn.</span></code></pre>
+
+  <p>This is how every chatbot tutorial works. It is also why every chatbot tutorial breaks in production after a long enough conversation.</p>
+
+  <h3>Technique 2 — Summarization + Rolling Window</h3>
+
+  <p>When history gets too long to fit in one context, you summarize it. Keep the last N messages verbatim (the rolling window). Compress everything older into a summary. Inject both into the next context. The model reads recent messages in full and gets a compressed representation of the rest.</p>
+
+<pre><code><span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
+
+client = Anthropic()
+WINDOW_SIZE = <span class="nb">20</span>   <span class="cm"># keep last 20 messages verbatim</span>
+
+<span class="kw">def</span> <span class="fn">summarize_old_messages</span>(messages: list) -> str:
+    <span class="cm">"""Use Claude to compress old conversation into a summary."""</span>
+    summary_prompt = (
+        <span class="str">"Summarize the following conversation history concisely. "</span>
+        <span class="str">"Preserve key facts, decisions, and user preferences:\n\n"</span>
+    )
+    <span class="kw">for</span> m <span class="kw">in</span> messages:
+        summary_prompt += f<span class="str">"{m['role'].upper()}: {m['content']}\n"</span>
+
+    response = client.messages.create(
+        model=<span class="str">"claude-sonnet-4-6"</span>, max_tokens=<span class="nb">512</span>,
+        messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: summary_prompt}]
+    )
+    <span class="kw">return</span> response.content[<span class="nb">0</span>].text
+
+<span class="kw">def</span> <span class="fn">build_context</span>(full_history: list) -> tuple[str, list]:
+    <span class="kw">if</span> <span class="fn">len</span>(full_history) <= WINDOW_SIZE:
+        <span class="kw">return</span> <span class="str">""</span>, full_history
+
+    old = full_history[:-WINDOW_SIZE]
+    recent = full_history[-WINDOW_SIZE:]
+    summary = <span class="fn">summarize_old_messages</span>(old)
+    <span class="kw">return</span> summary, recent
+
+<span class="cm"># The system prompt gets the summary injected:
+# "Summary of previous conversation: [summary]"
+# Then recent messages follow as normal.
+# Cost is now bounded: O(window) instead of O(total turns).</span></code></pre>
+
+  <h3>Technique 3 — External Memory + Semantic Retrieval</h3>
+
+  <p>The most powerful approach: store memories externally in a vector database. When a new query arrives, embed it and retrieve only the most relevant memories — specific facts, past decisions, user preferences that are semantically related to the current question. Inject only what is relevant. Leave everything else in the database.</p>
+
+<pre><code><span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
+<span class="kw">import</span> chromadb
+<span class="kw">import</span> json
+
+client = Anthropic()
+db = chromadb.<span class="fn">Client</span>()
+memory_collection = db.<span class="fn">get_or_create_collection</span>(<span class="str">"user_memories"</span>)
+
+<span class="kw">def</span> <span class="fn">save_memory</span>(user_id: str, content: str, mem_type: str):
+    <span class="cm">"""Persist a memory to the vector store after a conversation turn."""</span>
+    memory_collection.add(
+        documents=[content],
+        metadatas=[{<span class="str">"user_id"</span>: user_id, <span class="str">"type"</span>: mem_type}],
+        ids=[f<span class="str">"{user_id}_{<span class="fn">hash</span>(content)}"</span>]
+    )
+
+<span class="kw">def</span> <span class="fn">retrieve_memories</span>(user_id: str, query: str, k: int = <span class="nb">5</span>) -> list[str]:
+    <span class="cm">"""Retrieve the k most relevant memories for this query."""</span>
+    results = memory_collection.query(
+        query_texts=[query],
+        n_results=k,
+        where={<span class="str">"user_id"</span>: user_id}
+    )
+    <span class="kw">return</span> results[<span class="str">"documents"</span>][<span class="nb">0</span>]
+
+<span class="kw">def</span> <span class="fn">chat_with_memory</span>(user_id: str, user_message: str) -> str:
+    <span class="cm"># Retrieve relevant memories for this specific query</span>
+    relevant_memories = <span class="fn">retrieve_memories</span>(user_id, user_message)
+    memory_block = <span class="str">"\n"</span>.join(f<span class="str">"- {m}"</span> <span class="kw">for</span> m <span class="kw">in</span> relevant_memories)
+
+    system = f<span class="str">"""You are a helpful assistant with memory of past interactions.
+
+Relevant memories about this user:
+{memory_block}
+
+Use these memories naturally to personalize your response."""</span>
+
+    response = client.messages.create(
+        model=<span class="str">"claude-sonnet-4-6"</span>, max_tokens=<span class="nb">1024</span>,
+        system=system,
+        messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: user_message}]
+    )
+
+    result = response.content[<span class="nb">0</span>].text
+    <span class="cm"># Save this exchange as a new memory after each turn</span>
+    <span class="fn">save_memory</span>(user_id, f<span class="str">"User asked: {user_message}"</span>, <span class="str">"episodic"</span>)
+    <span class="kw">return</span> result
+
+<span class="cm"># Now the system remembers across sessions.
+# A user who closes the tab and comes back tomorrow gets their context back.
+# The model never stored anything — the database did.</span></code></pre>
+
+  <div class="callout tip">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Key Insight:</strong> The model did not learn anything. It just read its notes before the meeting. From the model's perspective, it saw a message that said "here are relevant things about this user" and responded accordingly. The illusion of persistent memory is entirely constructed by the infrastructure around the model.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- LETTA / OS MODEL -->
+  <h2>Letta: Treating Memory Like an <span class="italic">Operating System</span></h2>
+
+  <p>The Letta framework takes the most rigorous engineering approach to LLM memory. Rather than treating it as a conversational feature, Letta treats memory like a computer's memory hierarchy — exactly as an operating system manages RAM versus disk storage.</p>
+
+  <p>The insight is precise: an LLM is not a brain. It is a tokens-in-tokens-out function. Anthropomorphizing it leads to bad architecture. Instead, model its memory the same way you model any stateless computation system that needs external state.</p>
+
+  <div class="letta-layers">
+    <div class="letta-layer l1">
+      <div class="letta-layer-badge">Hot / RAM</div>
+      <div class="letta-layer-name">Message Buffer</div>
+      <div class="letta-layer-desc">Most recent messages from the current conversation. In-context, instant access. Like CPU cache.</div>
+      <div class="letta-layer-size">~last 10–20 msgs</div>
+    </div>
+    <div class="letta-layer l2 active">
+      <div class="letta-layer-badge">Warm / Core</div>
+      <div class="letta-layer-name">Core Memory</div>
+      <div class="letta-layer-desc">Key persistent facts the agent manages itself — user name, preferences, ongoing task state. In-context but explicitly managed. Like working set memory.</div>
+      <div class="letta-layer-size">~2,000 tokens</div>
+    </div>
+    <div class="letta-layer l3">
+      <div class="letta-layer-badge">Cool / SSD</div>
+      <div class="letta-layer-name">Recall Memory</div>
+      <div class="letta-layer-desc">Full raw conversation history stored externally. Retrieved on demand. Like fast disk — searchable but not always in-context.</div>
+      <div class="letta-layer-size">Unlimited</div>
+    </div>
+    <div class="letta-layer l4">
+      <div class="letta-layer-badge">Cold / HDD</div>
+      <div class="letta-layer-name">Archival Memory</div>
+      <div class="letta-layer-desc">Explicitly stored knowledge — facts, summaries, documents the agent has decided to remember permanently. Vector-indexed for semantic retrieval.</div>
+      <div class="letta-layer-size">Unlimited</div>
+    </div>
+  </div>
+
+  <p>What makes Letta powerful is that the agent can autonomously move information between layers. It reads a key user preference during conversation → stores it to Core Memory. Conversation grows too long → older exchanges get archived to Recall Memory. A new piece of domain knowledge is shared → agent explicitly writes it to Archival Memory. The agent manages its own memory hierarchy the same way an OS manages virtual memory.</p>
+
+  <hr class="div">
+
+  <!-- AGENTIC MEMORY -->
+  <h2>Agentic Memory: The Model Decides What to <span class="italic">Remember</span></h2>
+
+  <p>The latest frontier is moving beyond pre-programmed memory rules into truly agentic memory — systems where the LLM agent itself decides what deserves to be remembered, how memories should be linked to each other, and when a stored memory should be updated or discarded.</p>
+
+  <p>A-MEM, published at NeurIPS 2025, introduced one of the most sophisticated approaches. It uses Zettelkasten principles — the note-taking method favored by researchers for building interconnected knowledge networks — applied to agent memory. When a new memory is added, the system generates a comprehensive note with contextual descriptions, keywords, and tags. It then finds links to existing memories and updates them accordingly. Memories are not isolated records — they are nodes in a dynamic knowledge graph.</p>
+
+<pre><code><span class="kw">from</span> agentic_memory.memory_system <span class="kw">import</span> AgenticMemorySystem
+
+<span class="cm"># Initialize A-MEM with embedding model + LLM backend</span>
+memory = <span class="fn">AgenticMemorySystem</span>(
+    model_name=<span class="str">"all-MiniLM-L6-v2"</span>,
+    llm_backend=<span class="str">"openai"</span>,
+    llm_model=<span class="str">"gpt-4o-mini"</span>
+)
+
+<span class="cm"># Agent adds a memory — system automatically:
+# 1. Generates contextual description
+# 2. Extracts keywords and tags
+# 3. Finds related existing memories
+# 4. Creates bidirectional links between them</span>
+memory_id = memory.<span class="fn">add_note</span>(
+    content=<span class="str">"User prefers Python over JavaScript for backend work"</span>,
+    tags=[<span class="str">"preference"</span>, <span class="str">"python"</span>, <span class="str">"backend"</span>],
+    category=<span class="str">"user_preference"</span>
+)
+
+<span class="cm"># Later: semantic search retrieves related memories
+results = memory.<span class="fn">search_agentic</span>(<span class="str">"what language should I use for this API?"</span>, k=<span class="nb">3</span>)
+<span class="cm"># Returns: Python preference + any related language/tooling memories
+# The graph traversal finds connections the vector search alone might miss</span></code></pre>
+
+  <p>The key advance is memory evolution. When a new memory is added that contradicts an existing one — say, the user switched from Python to Rust for performance reasons — the system can update the contextual representation of the older memory rather than just appending a new contradictory entry. Memories are not append-only logs. They are living, updateable knowledge nodes.</p>
+
+  <hr class="div">
+
+  <!-- COST ANALYSIS -->
+  <h2>Long-Context vs External Memory: The Cost Crossover</h2>
+
+  <p>With Gemini 2.5 Pro offering 2 million token context windows, a reasonable question is: why bother with external memory at all? Why not just stuff everything into the context window and let the model handle it?</p>
+
+  <p>A systematic analysis published in early 2026 compared long-context models against fact-based external memory systems across multiple benchmarks. The result: long-context models do have advantages in factual recall. But the cost structure is brutally unfavorable.</p>
+
+  <div class="cost-box">
+    <div class="cost-metric">
+      <div class="cost-num">10</div>
+      <div class="cost-label">conversation turns before external memory becomes more cost-efficient at 100K context length</div>
+    </div>
+    <div class="cost-metric">
+      <div class="cost-num">3–5×</div>
+      <div class="cost-label">higher inference cost for long-context models vs equivalent external memory retrieval</div>
+    </div>
+    <div class="cost-metric">
+      <div class="cost-num">Linear</div>
+      <div class="cost-label">cost growth with every turn for long-context approaches vs bounded cost with retrieval</div>
+    </div>
+  </div>
+
+  <p>At 100K context length, an external memory system is more cost-efficient than a long-context LLM after approximately 10 turns. The break-even point arrives fast for anything resembling a real production workload. Long-context is great for one-shot deep document analysis. External memory is correct for any system where users have ongoing conversations over days or weeks.</p>
+
+  <div class="callout insight">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>The practical rule:</strong> Use the context window for the current task's immediate context. Use external memory for everything that needs to persist across sessions. Never use the context window as a substitute for a memory architecture. Context is scarce; external storage is not.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- COMPARISON TABLE -->
+  <h2>Memory Approaches — Full Comparison</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Persists?</th>
+          <th>Cross-session?</th>
+          <th>Cost</th>
+          <th>Scales to?</th>
+          <th>Best For</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Full history injection</strong></td>
+          <td class="bad">Session only</td>
+          <td class="bad">No</td>
+          <td class="bad">Linear growth</td>
+          <td>Short sessions</td>
+          <td>Prototypes, demos</td>
+        </tr>
+        <tr>
+          <td><strong>Summarization + window</strong></td>
+          <td class="bad">Session only</td>
+          <td class="bad">No</td>
+          <td class="mid">Bounded</td>
+          <td>Long single sessions</td>
+          <td>Long chatbot sessions</td>
+        </tr>
+        <tr>
+          <td><strong>External vector store</strong></td>
+          <td class="good">Permanent</td>
+          <td class="good">Yes</td>
+          <td class="good">Low + bounded</td>
+          <td>Millions of memories</td>
+          <td>Production assistants</td>
+        </tr>
+        <tr>
+          <td><strong>Letta tiered OS model</strong></td>
+          <td class="good">Permanent</td>
+          <td class="good">Yes</td>
+          <td class="mid">Medium</td>
+          <td>Long-horizon agents</td>
+          <td>Persistent AI agents</td>
+        </tr>
+        <tr>
+          <td><strong>Agentic memory (A-MEM)</strong></td>
+          <td class="good">Permanent + evolving</td>
+          <td class="good">Yes</td>
+          <td class="bad">High (LLM per memory)</td>
+          <td>Complex knowledge work</td>
+          <td>Research, enterprise AI</td>
+        </tr>
+        <tr>
+          <td><strong>Long context window only</strong></td>
+          <td class="bad">Session only</td>
+          <td class="bad">No</td>
+          <td class="bad">Very high at scale</td>
+          <td>Single large docs</td>
+          <td>One-shot deep analysis</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="div">
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw a diagram showing 'The 4 Levels of LLM Memory'. Show a brain/CPU icon in the center labeled 'LLM (stateless)'. Surrounding it, draw 4 concentric zones: (1) Inner ring in indigo: 'Parametric Memory — baked into weights, trained knowledge — permanent, read-only'; (2) Second ring in sky blue: 'Context Window — active working memory — temporary, finite tokens, cleared each session'; (3) Third ring in emerald: 'External Memory (Vector DB) — conversation history, user facts, documents — permanent, retrieved via semantic search'; (4) Outer ring in amber: 'Agentic Memory — self-organizing, dynamically linked knowledge graphs — evolving, agent-managed'. Add arrows from outer rings pointing inward toward the context window, labeled 'injected at query time'. Title the diagram 'All memory must pass through the context window to reach the model'. Dark clean style with the four color zones clearly distinguished."
+  </div>
+
+  <hr class="div">
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-mark">"</div>
+    <div class="opinion-text">The entire memory industry around LLMs exists because of one architectural fact: the context window is the model's only sense organ. Every framework — LangChain, LlamaIndex, Letta, Mem0 — is fundamentally in the business of deciding what 1% of the available information to put in front of the model's face. The teams that win at production AI are not the ones with the smartest models. They are the ones with the most disciplined context engineering. Memory architecture is competitive advantage disguised as plumbing.</div>
+    <div class="opinion-attr">— Personal take · Based on production AI system patterns through Q1 2026</div>
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>What You Now Know</h2>
+    <p>LLMs are stateless. They know what they were trained on, and they can read what you put in their context window — and that is everything. There is no background process forming memories. There is no learning happening as you chat. The model that talks to you has the same weights it had before you started, and will have the same weights after.</p>
+    <p>What creates the appearance of memory is a system built around the model: a context window that gets carefully assembled before each generation call, an external store that holds conversation history and user facts, a retrieval mechanism that selects what is most relevant to the current query, and a summarization layer that compresses what does not fit.</p>
+    <p><strong>In 2026, the frontier is agentic memory</strong> — systems where the agent autonomously manages its own memory hierarchy, decides what is worth storing, how memories should be linked, and when outdated memories should be revised. A-MEM showed this works at NeurIPS 2025. Letta showed the OS-inspired architecture is production-viable. The gap between a stateless chatbot and a genuinely persistent AI assistant is now primarily an engineering gap, not a model capability gap. That is good news for builders.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="cta-label">Your next step</div>
+    <div class="cta-text">If you are building an AI assistant right now, implement the external vector store approach this week. Add a memory save call after every conversation turn. Add a memory retrieval call before every generation. Measure how differently users interact with a system that remembers them versus one that does not. The difference is immediate and dramatic. Share what you build.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <p><strong>Discussion question —</strong> Are you managing memory in your AI systems explicitly today, or are you relying on the context window? And if you have moved to external memory — which approach gave you the biggest user experience improvement: the simple vector store approach, or something more sophisticated?</p>
+  </div>
+
+  <!-- RELATED POSTS -->
+  <span class="related-label">Related posts to write next</span>
+  <div class="related-grid">
+    <div class="related-card">
+      <div class="rc-tag">Tutorial</div>
+      <div class="rc-title">Building a Persistent AI Assistant with Mem0 and LangGraph — Full Production Guide</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Deep-Dive</div>
+      <div class="rc-title">Context Engineering: The Discipline of Making LLMs Smarter Without Changing the Model</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Explainer</div>
+      <div class="rc-title">Long-Context LLMs vs External Memory — A Cost-Performance Analysis for Production Systems</div>
+    </div>
+  </div>
+
+  <!-- SEO BLOCK -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row"><strong>Primary keyword:</strong> how do LLMs remember</div>
+    <div class="seo-row"><strong>URL slug:</strong> <code>/blog/llms-dont-have-memory-how-they-remember</code></div>
+    <div class="seo-row" style="margin-top:10px"><strong>Secondary keywords:</strong></div>
+    <div class="tag-list" style="margin-bottom:14px">
+      <span class="seo-tag">LLM memory systems</span>
+      <span class="seo-tag">context window explained</span>
+      <span class="seo-tag">agentic memory</span>
+      <span class="seo-tag">AI agent long-term memory</span>
+      <span class="seo-tag">context engineering</span>
+    </div>
+    <div class="seo-row"><strong>Suggested tags:</strong></div>
+    <div class="tag-list">
+      <span class="seo-tag">llm</span>
+      <span class="seo-tag">memory</span>
+      <span class="seo-tag">context-window</span>
+      <span class="seo-tag">agentic-ai</span>
+      <span class="seo-tag">rag</span>
+      <span class="seo-tag">langchain</span>
+      <span class="seo-tag">ai-engineering</span>
+      <span class="seo-tag">explainer</span>
+    </div>
+    <div style="font-size:13px;color:var(--dim);margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+      Sources: A-MEM: Agentic Memory for LLM Agents (NeurIPS 2025, arXiv:2502.12110) · Weaviate Context Engineering Guide (Dec 2025) · Leonie Monigatti — Making Sense of Memory in AI Agents · GitHub IAAR-Shanghai/Awesome-AI-Memory (Beyond the Context Window cost analysis) · MachineLearningMastery: 6 Best AI Agent Memory Frameworks 2026 · The New Stack: Memory for AI Agents (Jan 2026)
+    </div>
+  </div>
+
+</main>
+
+</body>
+</html>

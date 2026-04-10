@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vectorization vs Embeddings — The Difference Every ML Engineer Must Understand</title>
+<meta name="description" content="Vectorization and embeddings both convert text to numbers — but they do it differently, capture different information, and are suited to completely different tasks. Here's the complete visual guide.">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;1,400;1,700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f0f4ff;
+  --surface: #ffffff;
+  --surface2: #e8edf8;
+  --ink: #111827;
+  --ink2: #374151;
+  --muted: #6b7280;
+  --dim: #9ca3af;
+  --border: #e5e7eb;
+  --border2: #d1d5db;
+
+  /* Vectorization = orange family */
+  --vec: #ea580c;
+  --vec-soft: rgba(234,88,12,0.07);
+  --vec-border: rgba(234,88,12,0.25);
+  --vec-mid: rgba(234,88,12,0.5);
+
+  /* Embeddings = violet family */
+  --emb: #7c3aed;
+  --emb-soft: rgba(124,58,237,0.07);
+  --emb-border: rgba(124,58,237,0.25);
+  --emb-mid: rgba(124,58,237,0.5);
+
+  /* Shared/neutral = teal */
+  --teal: #0891b2;
+  --teal-soft: rgba(8,145,178,0.07);
+  --teal-border: rgba(8,145,178,0.25);
+
+  --green: #16a34a;
+  --red: #dc2626;
+  --yellow: #ca8a04;
+
+  --code-bg: #1f2937;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Outfit', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.78;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  background: var(--ink);
+  padding: 14px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-left {
+  display: flex; align-items: center; gap: 16px;
+}
+.topbar-brand {
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.4);
+  letter-spacing: 0.04em;
+}
+.topbar-pill {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 3px 10px; border-radius: 999px;
+}
+.pill-vec { background: var(--vec-soft); color: var(--vec); border: 1px solid var(--vec-border); }
+.pill-emb { background: var(--emb-soft); color: var(--emb); border: 1px solid var(--emb-border); }
+.topbar-issue { font-size: 11px; color: rgba(255,255,255,0.25); font-family: 'Fira Code', monospace; }
+
+/* ── HERO ── */
+.hero {
+  background: var(--ink);
+  padding: 0;
+}
+.hero-split {
+  display: flex; min-height: 380px;
+}
+.hero-left {
+  flex: 1; padding: 72px 48px;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+.hero-right {
+  flex: 0 0 340px;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 40px 32px;
+  gap: 16px;
+}
+.hero-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--teal);
+  margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+}
+.hero-eyebrow::after { content: ''; width: 32px; height: 1px; background: var(--teal); }
+h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(34px, 4.5vw, 54px);
+  font-weight: 700; line-height: 1.1;
+  letter-spacing: -0.02em; color: #fff;
+  margin-bottom: 24px;
+}
+h1 em { font-style: italic; font-weight: 400; }
+.hero-sub {
+  font-size: 17px; font-weight: 300; color: rgba(255,255,255,0.55);
+  max-width: 520px; line-height: 1.7;
+  margin-bottom: 28px;
+}
+.hero-meta {
+  font-size: 13px; color: rgba(255,255,255,0.3);
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.hero-meta span { display: flex; align-items: center; gap: 4px; }
+/* hero right panels */
+.hero-stat {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 18px 16px;
+}
+.hero-stat-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim); margin-bottom: 6px;
+}
+.hero-stat-val {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px; line-height: 1.2; color: #fff; font-style: italic;
+}
+.hero-stat.vec .hero-stat-label { color: var(--vec); }
+.hero-stat.emb .hero-stat-label { color: var(--emb); }
+
+/* ── MAIN LAYOUT ── */
+.main { max-width: 820px; margin: 0 auto; padding: 0 40px 120px; }
+
+/* ── TYPOGRAPHY ── */
+h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px; font-weight: 700;
+  color: var(--ink); line-height: 1.2; letter-spacing: -0.01em;
+  margin: 72px 0 20px;
+}
+h2 em { font-style: italic; font-weight: 400; }
+h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px; font-weight: 600; color: var(--ink2);
+  margin: 36px 0 12px;
+}
+p { margin-bottom: 22px; color: var(--ink2); }
+p strong { color: var(--ink); font-weight: 600; }
+a { color: var(--emb); }
+hr.div { border: none; border-top: 1px solid var(--border); margin: 56px 0; }
+
+/* ── TL;DR ── */
+.tldr {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 28px 30px;
+  margin: 40px 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.tldr-head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--teal); margin-bottom: 14px;
+  font-family: 'Fira Code', monospace;
+}
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-size: 15px; color: var(--ink2);
+  padding-left: 22px; position: relative; line-height: 1.6;
+}
+.tldr li::before { content: '▸'; position: absolute; left: 0; color: var(--teal); }
+
+/* ── SPLIT COMPARE CARD ── */
+.split-card {
+  display: flex; gap: 0;
+  border: 1px solid var(--border2);
+  border-radius: 10px; overflow: hidden;
+  margin: 32px 0;
+  background: var(--surface);
+}
+.split-side {
+  flex: 1; padding: 24px 24px;
+}
+.split-side.left {
+  border-right: 1px solid var(--border2);
+  border-top: 4px solid var(--vec);
+}
+.split-side.right {
+  border-top: 4px solid var(--emb);
+}
+.split-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.split-side.left .split-label { color: var(--vec); }
+.split-side.right .split-label { color: var(--emb); }
+.split-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px; font-weight: 700; color: var(--ink);
+  margin-bottom: 10px;
+}
+.split-sub { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+/* ── CALLOUT ── */
+.callout {
+  border-radius: 8px; padding: 16px 20px; margin: 28px 0;
+  display: flex; gap: 14px; border: 1px solid; background: var(--surface);
+}
+.callout.vec { border-color: var(--vec-border); background: var(--vec-soft); }
+.callout.emb { border-color: var(--emb-border); background: var(--emb-soft); }
+.callout.teal { border-color: var(--teal-border); background: var(--teal-soft); }
+.callout.warn { border-color: rgba(202,138,4,0.3); background: rgba(202,138,4,0.07); }
+.callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 15px; line-height: 1.65; color: var(--ink2); }
+.callout-body strong { color: var(--ink); }
+
+/* ── CODE ── */
+pre {
+  background: var(--code-bg); border-radius: 8px;
+  padding: 22px 24px; overflow-x: auto; margin: 24px 0;
+  font-family: 'Fira Code', monospace; font-size: 13px; line-height: 1.75;
+  color: #e5e7eb;
+}
+code {
+  font-family: 'Fira Code', monospace; font-size: 13.5px;
+  color: var(--vec); background: var(--vec-soft);
+  border: 1px solid var(--vec-border); padding: 1px 6px; border-radius: 4px;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+.kw { color: #93c5fd; }
+.fn { color: #6ee7b7; }
+.str { color: #fcd34d; }
+.cm { color: #6b7280; font-style: italic; }
+.nb { color: #f9a8d4; }
+.cl { color: #c4b5fd; }
+pre .vec-c { color: #fb923c; }
+pre .emb-c { color: #a78bfa; }
+
+/* ── VISUAL: ONE-HOT BOX ── */
+.onehot-visual {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px; padding: 28px 24px; margin: 28px 0;
+  overflow-x: auto;
+}
+.visual-label {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px; color: var(--muted); letter-spacing: 0.08em;
+  text-transform: uppercase; margin-bottom: 20px;
+}
+/* ── TECHNIQUE TIMELINE ── */
+.tech-timeline {
+  position: relative; margin: 32px 0;
+  display: flex; flex-direction: column; gap: 0;
+}
+.tech-timeline::before {
+  content: ''; position: absolute;
+  left: 80px; top: 24px; bottom: 24px; width: 2px;
+  background: linear-gradient(to bottom, var(--vec), var(--emb));
+}
+.tech-item {
+  display: flex; gap: 24px; align-items: flex-start; padding: 0 0 28px;
+}
+.tech-year {
+  flex-shrink: 0; width: 72px; text-align: right;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px; color: var(--dim); padding-top: 18px;
+}
+.tech-dot-wrap {
+  flex-shrink: 0; width: 18px; display: flex;
+  flex-direction: column; align-items: center; padding-top: 18px;
+  position: relative; z-index: 1;
+}
+.tech-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid; background: var(--bg);
+  flex-shrink: 0;
+}
+.tech-dot.vec { border-color: var(--vec); }
+.tech-dot.mid { border-color: var(--teal); }
+.tech-dot.emb { border-color: var(--emb); }
+.tech-dot.both {
+  background: linear-gradient(135deg, var(--vec) 50%, var(--emb) 50%);
+  border: none; width: 14px; height: 14px;
+}
+.tech-body {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px; padding: 16px 18px;
+}
+.tech-name {
+  font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 4px;
+}
+.tech-desc {
+  font-size: 13px; color: var(--muted); line-height: 1.6;
+}
+.tech-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.tech-tag {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid;
+}
+.tech-tag.vec { color: var(--vec); border-color: var(--vec-border); background: var(--vec-soft); }
+.tech-tag.emb { color: var(--emb); border-color: var(--emb-border); background: var(--emb-soft); }
+.tech-tag.both {
+  color: var(--teal); border-color: var(--teal-border); background: var(--teal-soft);
+}
+
+/* ── DIMENSION TABLE ── */
+.table-wrap { overflow-x: auto; margin: 28px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left; padding: 12px 16px;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  white-space: nowrap; border-bottom: 2px solid var(--border2);
+}
+th.vec-h { color: var(--vec); border-bottom-color: var(--vec); }
+th.emb-h { color: var(--emb); border-bottom-color: var(--emb); }
+th.dim-h { color: var(--muted); }
+td {
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  color: var(--ink2); line-height: 1.5; vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+td.vec-cell { color: var(--vec); font-weight: 500; }
+td.emb-cell { color: var(--emb); font-weight: 500; }
+td.dim-cell { font-weight: 600; color: var(--ink); }
+td.good { color: var(--green); font-weight: 500; }
+td.bad { color: var(--red); }
+td.mid { color: var(--yellow); font-weight: 500; }
+
+/* ── ANALOGY BOXES ── */
+.analogy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px; margin: 28px 0;
+}
+.analogy-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px; padding: 22px 18px;
+}
+.analogy-card .a-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.a-card-vec .a-label { color: var(--vec); }
+.a-card-emb .a-label { color: var(--emb); }
+.analogy-icon { font-size: 32px; margin-bottom: 10px; }
+.a-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px; color: var(--ink); font-weight: 700; margin-bottom: 6px;
+}
+.a-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+/* ── USE CASE CHIPS ── */
+.use-cases { margin: 28px 0; }
+.uc-label {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 12px;
+}
+.uc-grid {
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+.uc-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 6px; padding: 10px 14px;
+  font-size: 14px; font-weight: 500; color: var(--ink2);
+}
+.uc-chip .dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.uc-chip .dot.vec { background: var(--vec); }
+.uc-chip .dot.emb { background: var(--emb); }
+
+/* ── DECISION TREE ── */
+.decision-box {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px; padding: 28px 24px; margin: 32px 0;
+  overflow-x: auto;
+}
+
+/* ── OPINION ── */
+.opinion {
+  margin: 56px 0; padding: 36px 36px;
+  background: var(--ink); color: #fff;
+  border-radius: 10px; position: relative;
+}
+.opinion-q {
+  font-family: 'Playfair Display', serif;
+  font-size: 60px; line-height: 1; font-style: italic;
+  color: rgba(124,58,237,0.4); position: absolute; top: 16px; left: 28px;
+}
+.opinion-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px; font-style: italic; color: rgba(255,255,255,0.9);
+  line-height: 1.6; margin-bottom: 16px; padding-top: 18px;
+}
+.opinion-attr { font-size: 13px; color: rgba(255,255,255,0.35); }
+
+/* ── CONCLUSION / CTA ── */
+.conclusion {
+  border-radius: 10px; padding: 36px 32px; margin: 56px 0 40px;
+  background: var(--surface);
+  border-left: 5px solid var(--emb);
+  border-top: 1px solid var(--border2);
+  border-right: 1px solid var(--border2);
+  border-bottom: 1px solid var(--border2);
+}
+.conclusion h2 { margin-top: 0; }
+
+.cta-block {
+  background: linear-gradient(135deg, var(--vec-soft), var(--emb-soft));
+  border: 1px solid var(--border2);
+  border-radius: 10px; padding: 28px 28px; margin: 32px 0;
+}
+.cta-label {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--emb); margin-bottom: 10px;
+}
+.cta-text { font-size: 16px; line-height: 1.6; color: var(--ink2); }
+
+/* ── DISCUSSION ── */
+.discussion {
+  background: var(--surface2);
+  border-radius: 8px; padding: 22px 22px; margin: 32px 0;
+}
+.discussion p { margin: 0; font-size: 15px; color: var(--ink2); }
+.discussion p strong { color: var(--ink); }
+
+/* ── RELATED ── */
+.related-label {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px; margin-top: 48px; display: block;
+}
+.related-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;
+}
+.related-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 16px; transition: border-color 0.2s;
+}
+.related-card:hover { border-color: var(--emb); }
+.rc-tag {
+  font-family: 'Fira Code', monospace; font-size: 10px; color: var(--green);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
+}
+.rc-title { font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.4; }
+
+/* ── SEO ── */
+.seo-block {
+  border-top: 1px solid var(--border); margin-top: 64px; padding-top: 28px;
+}
+.seo-block h3 {
+  font-family: 'Fira Code', monospace; font-size: 11px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
+  font-weight: 400;
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.seo-tag {
+  font-family: 'Fira Code', monospace; font-size: 11px; color: var(--emb);
+  background: var(--emb-soft); border: 1px solid var(--emb-border);
+  padding: 3px 10px; border-radius: 3px;
+}
+.seo-row { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.seo-row strong { color: var(--ink2); font-weight: 500; }
+
+/* ── EXCALI ── */
+.excali {
+  background: var(--surface2); border: 1px dashed var(--border2);
+  border-radius: 8px; padding: 20px 20px; margin: 28px 0;
+  font-size: 14px; color: var(--muted); line-height: 1.7;
+}
+.excali strong {
+  font-family: 'Fira Code', monospace; font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--emb);
+  display: block; margin-bottom: 8px;
+}
+
+@media (max-width: 700px) {
+  .hero-split { flex-direction: column; }
+  .hero-right { flex: 0 0 auto; border-right: none; border-top: 1px solid rgba(255,255,255,0.06); }
+  .hero-left { padding: 52px 24px; }
+  h1 { font-size: 32px; }
+  h2 { font-size: 26px; }
+  .main { padding: 0 20px 80px; }
+  .topbar { padding: 12px 20px; }
+  .tech-timeline::before { left: 76px; }
+  .split-card { flex-direction: column; }
+  .split-side.left { border-right: none; border-bottom: 1px solid var(--border2); }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Agentic AI Engineering</span>
+    <span class="topbar-pill pill-vec">Vectorization</span>
+    <span class="topbar-pill pill-emb">Embeddings</span>
+  </div>
+  <span class="topbar-issue">Issue #14 · April 2026</span>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-split">
+    <div class="hero-left">
+      <div class="hero-eyebrow">ML Fundamentals · NLP · Deep-Dive</div>
+      <h1>Vectorization vs <em>Embeddings</em><br>— The Difference That Actually Matters</h1>
+      <div class="hero-sub">Both convert text into numbers. Both produce vectors. Both are used everywhere in ML and NLP. And yet they are solving fundamentally different problems — and using them interchangeably will break your models in ways that are very hard to debug.</div>
+      <div class="hero-meta">
+        <span>Krishil Agrawal</span>
+        <span>·</span>
+        <span>14 min read · ~3,000 words</span>
+        <span>·</span>
+        <span>For: ML engineers + AI developers</span>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-stat vec">
+        <div class="hero-stat-label">Vectorization</div>
+        <div class="hero-stat-val">Counting what is there</div>
+      </div>
+      <div class="hero-stat emb">
+        <div class="hero-stat-label">Embeddings</div>
+        <div class="hero-stat-val">Understanding what it means</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">The one-line difference</div>
+        <div class="hero-stat-val" style="font-size:17px;font-style:normal;font-family:'Outfit',sans-serif;font-weight:300;color:rgba(255,255,255,0.65)">Vectorization counts. Embeddings understand.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- INTRO -->
+  <p style="margin-top:52px;">Ask a hundred ML developers to define the difference between vectorization and embeddings and you will get a hundred slightly different answers — many of them partially wrong. You will hear "vectorization is just embeddings but older" or "embeddings are dense vectors and vectorization is sparse vectors" or the worst one: "they are basically the same thing." None of these are quite right.</p>
+
+  <p>Here is the precise version: <strong>vectorization is any process that converts data into numerical vectors.</strong> It is a broad category. It includes one-hot encoding, Bag of Words, TF-IDF, and yes, also embeddings. <strong>Embeddings are a specific kind of vectorization</strong> — one where the resulting vector is learned by a model and is designed to capture semantic meaning, not just frequency or presence.</p>
+
+  <p>Every embedding is a vector. Not every vector is an embedding. That asymmetry is the key. Everything else in this post flows from it.</p>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-head">TL;DR — the 5 things to know</div>
+    <ul>
+      <li>Vectorization is the broad parent category: any conversion of data to numerical vectors. Bag of Words, TF-IDF, one-hot encoding, and embeddings are all types of vectorization.</li>
+      <li>Embeddings are a specific subset of vectorization — learned, dense, low-dimensional vectors that encode semantic meaning. Similar concepts end up near each other in embedding space.</li>
+      <li>Traditional vectorization (BoW, TF-IDF) produces sparse, high-dimensional vectors. The word "bank" gets the same vector whether it means a financial institution or a riverbank. No context, no semantics.</li>
+      <li>Embeddings (Word2Vec, GloVe, BERT, text-embedding-3) produce dense, low-dimensional vectors. The word "bank" gets a different vector depending on context — and "king − man + woman ≈ queen" is a real mathematical relationship.</li>
+      <li>Use vectorization for fast, interpretable baselines. Use embeddings for semantic search, RAG, LLMs, recommendation systems, and any task where meaning matters more than word count.</li>
+    </ul>
+  </div>
+
+  <!-- SPLIT COMPARE -->
+  <div class="split-card">
+    <div class="split-side left">
+      <div class="split-label">Vectorization</div>
+      <div class="split-title">Rules-based counting</div>
+      <div class="split-sub">Manually designed process. Count words, measure frequencies, apply formulas. No training required. Fast, interpretable, and dimensionality = vocabulary size (often 10,000–100,000+). Sparse by nature.</div>
+    </div>
+    <div class="split-side right">
+      <div class="split-label">Embeddings</div>
+      <div class="split-title">Learned representation</div>
+      <div class="split-sub">Produced by training a neural network on large corpora. Dense, low-dimensional (64–4,096 dimensions). The model discovers which features of language matter. Similar meanings cluster in the same region of the vector space.</div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- SECTION: TRADITIONAL VECTORIZATION -->
+  <h2>Traditional Vectorization: <em>What It Is, How It Works</em></h2>
+
+  <p>Before neural networks made embeddings practical, every NLP pipeline used classical vectorization techniques. They are still used today in production — not because they are inferior in every way, but because they are fast, cheap, and fully interpretable. Let us look at the 3 core techniques.</p>
+
+  <h3>1 — One-Hot Encoding</h3>
+  <p>The simplest possible vectorization. Build a vocabulary of every unique word in your dataset. For each word, create a vector of length equal to the vocabulary size. Set a 1 at the word's position. Set 0 everywhere else. The word "cat" in a 5-word vocabulary becomes <code>[1, 0, 0, 0, 0]</code>. "Dog" becomes <code>[0, 1, 0, 0, 0]</code>.</p>
+
+  <!-- ONEHOT VISUAL -->
+  <div class="onehot-visual">
+    <div class="visual-label">One-Hot Encoding — vocabulary of 6 words</div>
+    <svg width="100%" viewBox="0 0 680 210" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <!-- Vocab row labels -->
+      <text font-family="'Fira Code',monospace" font-size="11" fill="#6b7280" x="20" y="48">vocab:</text>
+      <text font-family="'Fira Code',monospace" font-size="13" fill="#111827" font-weight="500" x="68" y="48">the</text>
+      <text font-family="'Fira Code',monospace" font-size="13" fill="#111827" font-weight="500" x="168" y="48">cat</text>
+      <text font-family="'Fira Code',monospace" font-size="13" fill="#111827" font-weight="500" x="268" y="48">sat</text>
+      <text font-family="'Fira Code',monospace" font-size="13" fill="#111827" font-weight="500" x="368" y="48">on</text>
+      <text font-family="'Fira Code',monospace" font-size="13" fill="#111827" font-weight="500" x="468" y="48">mat</text>
+      <text font-family="'Fira Code',monospace" font-size="13" fill="#111827" font-weight="500" x="568" y="48">dog</text>
+
+      <!-- divider -->
+      <line x1="20" y1="58" x2="640" y2="58" stroke="#e5e7eb" stroke-width="0.5"/>
+
+      <!-- "cat" vector row -->
+      <text font-family="'Fira Code',monospace" font-size="11" fill="#ea580c" x="20" y="90" font-weight="500">"cat":</text>
+
+      <!-- cells for cat vector -->
+      <rect x="60" y="72" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="100" y="92" text-anchor="middle">0</text>
+
+      <rect x="148" y="72" width="80" height="30" rx="3" fill="#fef3c7" stroke="#ea580c" stroke-width="1"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#ea580c" x="188" y="92" text-anchor="middle" font-weight="600">1</text>
+
+      <rect x="248" y="72" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="288" y="92" text-anchor="middle">0</text>
+
+      <rect x="348" y="72" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="388" y="92" text-anchor="middle">0</text>
+
+      <rect x="448" y="72" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="488" y="92" text-anchor="middle">0</text>
+
+      <rect x="548" y="72" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="588" y="92" text-anchor="middle">0</text>
+
+      <!-- "dog" vector row -->
+      <text font-family="'Fira Code',monospace" font-size="11" fill="#ea580c" x="20" y="148" font-weight="500">"dog":</text>
+
+      <rect x="60" y="130" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="100" y="150" text-anchor="middle">0</text>
+      <rect x="148" y="130" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="188" y="150" text-anchor="middle">0</text>
+      <rect x="248" y="130" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="288" y="150" text-anchor="middle">0</text>
+      <rect x="348" y="130" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="388" y="150" text-anchor="middle">0</text>
+      <rect x="448" y="130" width="80" height="30" rx="3" fill="#f3f4f6" stroke="#e5e7eb" stroke-width="0.5"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#9ca3af" x="488" y="150" text-anchor="middle">0</text>
+      <rect x="548" y="130" width="80" height="30" rx="3" fill="#fef3c7" stroke="#ea580c" stroke-width="1"/>
+      <text font-family="'Fira Code',monospace" font-size="14" fill="#ea580c" x="588" y="150" text-anchor="middle" font-weight="600">1</text>
+
+      <!-- key insight: cat and dog are equidistant -->
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#6b7280" x="340" y="195" text-anchor="middle">cosine("cat", "dog") = 0.0 — same as cosine("cat", "sat"). Meaningless.</text>
+    </svg>
+  </div>
+
+  <p>The problem is obvious when you look at it: "cat" and "dog" are as mathematically unrelated as "cat" and "sat." The vectors are orthogonal — cosine similarity of zero. One-hot encoding captures presence but destroys all semantic relationship. Every word is equidistant from every other word.</p>
+
+  <h3>2 — Bag of Words (BoW)</h3>
+  <p>BoW counts how many times each word appears in a document. Instead of one vector per word, you get one vector per document — where each position holds the frequency of that vocabulary word. "The cat sat on the mat" becomes a vector that says: the=2, cat=1, sat=1, on=1, mat=1, dog=0.</p>
+
+<pre><code><span class="kw">from</span> sklearn.feature_extraction.text <span class="kw">import</span> CountVectorizer
+
+docs = [
+    <span class="str">"The cat sat on the mat"</span>,
+    <span class="str">"The dog sat on the log"</span>,
+]
+
+vectorizer = CountVectorizer()
+X = vectorizer.fit_transform(docs)
+
+<span class="cm"># X.toarray() →
+# [[1, 1, 0, 1, 1, 1, 0, 2]   ← "cat sat on the mat"
+#  [1, 0, 1, 1, 0, 1, 1, 2]]  ← "dog sat on the log"
+#   cat dog log mat on sat the (each column = one vocab word)
+
+# Problem: word ORDER is lost completely.
+# "The cat bit the dog" and "The dog bit the cat" have identical BoW vectors.</span>
+
+print(vectorizer.get_feature_names_out())
+print(X.toarray())</code></pre>
+
+  <h3>3 — TF-IDF (Term Frequency–Inverse Document Frequency)</h3>
+  <p>TF-IDF fixes one of BoW's biggest problems: common words like "the" and "is" get high counts but carry almost no information. TF-IDF weights each word by how frequently it appears in this document AND how rarely it appears across all documents. A word that appears in every document gets a low score. A word that appears in just one document gets a high score.</p>
+
+<pre><code><span class="kw">from</span> sklearn.feature_extraction.text <span class="kw">import</span> TfidfVectorizer
+
+docs = [
+    <span class="str">"The cat sat on the mat"</span>,
+    <span class="str">"The dog sat on the log"</span>,
+    <span class="str">"The quick brown fox jumped over the lazy dog"</span>,
+]
+
+tfidf = TfidfVectorizer()
+X = tfidf.fit_transform(docs)
+
+<span class="cm"># "sat" appears in 2/3 docs → medium score
+# "mat" appears in 1/3 docs → higher score (more discriminative)
+# "the" appears in all 3 docs → lowest score (least informative)
+# Still: "bank" (financial) and "bank" (river) have identical scores</span>
+
+<span class="cm"># TF-IDF score formula:
+# TF(t, d) = count of term t in doc d / total terms in d
+# IDF(t) = log(N / number of docs containing t)
+# TF-IDF(t, d) = TF × IDF</span></code></pre>
+
+  <div class="callout vec">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-body"><strong>The ceiling of traditional vectorization:</strong> All three methods above share one fatal limitation — they treat each word as an isolated token with no relationship to any other word. "King" and "Queen" are as unrelated as "King" and "pancake." The mathematics cannot express that mammals are more similar to each other than to furniture. Embeddings exist specifically to solve this.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- SECTION: EMBEDDINGS -->
+  <h2>Embeddings: Where Meaning <em>Lives in Space</em></h2>
+
+  <p>An embedding is a dense, low-dimensional vector that is learned by a neural network during training. The key word is learned. Nobody writes rules that say "cat and dog should have similar vectors." The model discovers, from the statistical patterns in billions of words of text, that words appearing in similar contexts tend to have similar meanings — and encodes that discovery as geometric proximity in vector space.</p>
+
+  <p>The result is something almost magical. Words with similar meanings cluster near each other. <code>king − man + woman ≈ queen</code> is a real, demonstrable arithmetic relationship in Word2Vec's embedding space. "Paris is to France as Berlin is to Germany" can be verified mathematically. The vector space becomes a map of meaning.</p>
+
+  <!-- EMBEDDING SPACE VISUAL -->
+  <div class="onehot-visual">
+    <div class="visual-label">Embedding space — semantic clustering (2D projection of high-dimensional vectors)</div>
+    <svg width="100%" viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg">
+      <!-- Background quadrants with very light color -->
+      <rect x="40" y="20" width="280" height="120" rx="6" fill="rgba(124,58,237,0.04)" stroke="rgba(124,58,237,0.1)" stroke-width="0.5"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="rgba(124,58,237,0.5)" x="52" y="38">Royalty cluster</text>
+
+      <rect x="360" y="20" width="280" height="120" rx="6" fill="rgba(8,145,178,0.04)" stroke="rgba(8,145,178,0.1)" stroke-width="0.5"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="rgba(8,145,178,0.5)" x="372" y="38">Animals cluster</text>
+
+      <rect x="40" y="155" width="280" height="110" rx="6" fill="rgba(234,88,12,0.04)" stroke="rgba(234,88,12,0.1)" stroke-width="0.5"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="rgba(234,88,12,0.5)" x="52" y="173">Geography cluster</text>
+
+      <rect x="360" y="155" width="280" height="110" rx="6" fill="rgba(22,163,74,0.04)" stroke="rgba(22,163,74,0.1)" stroke-width="0.5"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="rgba(22,163,74,0.5)" x="372" y="173">Tech cluster</text>
+
+      <!-- Royalty words -->
+      <circle cx="120" cy="80" r="5" fill="#7c3aed"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#7c3aed" font-weight="600" x="128" y="84">king</text>
+      <circle cx="200" cy="65" r="5" fill="#7c3aed"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#7c3aed" font-weight="600" x="208" y="69">queen</text>
+      <circle cx="90" cy="110" r="5" fill="#7c3aed" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#7c3aed" opacity="0.7" x="98" y="114">prince</text>
+      <circle cx="240" cy="100" r="5" fill="#7c3aed" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#7c3aed" opacity="0.7" x="248" y="104">princess</text>
+      <!-- arithmetic arrow -->
+      <line x1="125" y1="80" x2="198" y2="68" stroke="#7c3aed" stroke-width="1" stroke-dasharray="3 2" opacity="0.4" marker-end="url(#arr3)"/>
+
+      <!-- Animal words -->
+      <circle cx="430" cy="70" r="5" fill="#0891b2"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#0891b2" font-weight="600" x="438" y="74">cat</text>
+      <circle cx="510" cy="58" r="5" fill="#0891b2"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#0891b2" font-weight="600" x="518" y="62">dog</text>
+      <circle cx="470" cy="100" r="5" fill="#0891b2" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#0891b2" opacity="0.7" x="478" y="104">wolf</text>
+      <circle cx="580" cy="90" r="5" fill="#0891b2" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#0891b2" opacity="0.7" x="588" y="94">tiger</text>
+
+      <!-- Geography words -->
+      <circle cx="100" cy="195" r="5" fill="#ea580c"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#ea580c" font-weight="600" x="108" y="199">Paris</text>
+      <circle cx="200" cy="210" r="5" fill="#ea580c"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#ea580c" font-weight="600" x="208" y="214">London</text>
+      <circle cx="130" cy="235" r="5" fill="#ea580c" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#ea580c" opacity="0.7" x="138" y="239">Berlin</text>
+      <circle cx="255" cy="228" r="5" fill="#ea580c" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#ea580c" opacity="0.7" x="263" y="232">Tokyo</text>
+
+      <!-- Tech words -->
+      <circle cx="430" cy="190" r="5" fill="#16a34a"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#16a34a" font-weight="600" x="438" y="194">Python</text>
+      <circle cx="530" cy="205" r="5" fill="#16a34a"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#16a34a" font-weight="600" x="538" y="209">neural</text>
+      <circle cx="470" cy="235" r="5" fill="#16a34a" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#16a34a" opacity="0.7" x="478" y="239">vector</text>
+      <circle cx="590" cy="225" r="5" fill="#16a34a" opacity="0.6"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#16a34a" opacity="0.7" x="598" y="229">model</text>
+
+      <!-- caption -->
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#9ca3af" x="340" y="272" text-anchor="middle">Distance = semantic dissimilarity. Clusters emerge from training, not hand-coded rules.</text>
+    </svg>
+  </div>
+
+  <p>In a BoW vector, "cat" and "dog" have zero relationship. In an embedding space, they live close together in the "animal" cluster — neighbors of "wolf," "tiger," and "fox," but distant from "Paris" and "Python." No one programmed that. The model inferred it from billions of sentences where these words appeared in similar contexts.</p>
+
+  <hr class="div">
+
+  <!-- THE EVOLUTION TIMELINE -->
+  <h2>The Evolution of Text Representations — A Timeline</h2>
+
+  <div class="tech-timeline">
+    <div class="tech-item">
+      <div class="tech-year">1990s</div>
+      <div class="tech-dot-wrap"><div class="tech-dot vec"></div></div>
+      <div class="tech-body">
+        <div class="tech-name">One-Hot Encoding & Bag of Words</div>
+        <div class="tech-desc">The original approach. Sparse, high-dimensional, fast to compute. No semantic understanding. Used in early spam filters, keyword search, document classification with simple classifiers.</div>
+        <div class="tech-tags"><span class="tech-tag vec">Vectorization</span><span class="tech-tag vec">Sparse</span><span class="tech-tag vec">No semantics</span></div>
+      </div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-year">2001–2010</div>
+      <div class="tech-dot-wrap"><div class="tech-dot vec"></div></div>
+      <div class="tech-body">
+        <div class="tech-name">TF-IDF & N-Grams</div>
+        <div class="tech-desc">Better weighting — penalizes common words, rewards discriminative ones. N-grams capture some word order ("New York" as a unit). Still sparse, still no semantic meaning. Workhorse of classic information retrieval.</div>
+        <div class="tech-tags"><span class="tech-tag vec">Vectorization</span><span class="tech-tag vec">Statistical</span></div>
+      </div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-year">2013</div>
+      <div class="tech-dot-wrap"><div class="tech-dot mid"></div></div>
+      <div class="tech-body">
+        <div class="tech-name">Word2Vec (Google)</div>
+        <div class="tech-desc">The breakthrough. Mikolov et al. showed neural networks could learn dense word embeddings capturing semantic relationships. "king − man + woman ≈ queen." Two architectures: CBOW and Skip-gram. Changed NLP permanently.</div>
+        <div class="tech-tags"><span class="tech-tag emb">Embedding</span><span class="tech-tag emb">Dense</span><span class="tech-tag emb">Static</span></div>
+      </div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-year">2014</div>
+      <div class="tech-dot-wrap"><div class="tech-dot mid"></div></div>
+      <div class="tech-body">
+        <div class="tech-name">GloVe (Stanford)</div>
+        <div class="tech-desc">Global Vectors for Word Representation. Combined local context windows with global word co-occurrence statistics. More efficient training, competitive performance with Word2Vec.</div>
+        <div class="tech-tags"><span class="tech-tag emb">Embedding</span><span class="tech-tag emb">Static</span><span class="tech-tag emb">Corpus-level</span></div>
+      </div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-year">2018</div>
+      <div class="tech-dot-wrap"><div class="tech-dot emb"></div></div>
+      <div class="tech-body">
+        <div class="tech-name">ELMo & BERT — Contextual Embeddings</div>
+        <div class="tech-desc">The biggest leap since Word2Vec. "Bank" in "river bank" and "bank account" now get different vectors. The embedding changes based on surrounding context. Transformers make this possible at scale.</div>
+        <div class="tech-tags"><span class="tech-tag emb">Embedding</span><span class="tech-tag emb">Contextual</span><span class="tech-tag emb">Transformer-based</span></div>
+      </div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-year">2022–2026</div>
+      <div class="tech-dot-wrap"><div class="tech-dot emb"></div></div>
+      <div class="tech-body">
+        <div class="tech-name">Sentence Embeddings & Multimodal Models</div>
+        <div class="tech-desc">OpenAI text-embedding-3, sentence-transformers (SBERT), CLIP. Entire sentences and paragraphs encoded into a single vector. Foundation of modern RAG, semantic search, and vector databases. Multimodal: text and images share the same embedding space.</div>
+        <div class="tech-tags"><span class="tech-tag emb">Embedding</span><span class="tech-tag both">Sentence-level</span><span class="tech-tag both">Multimodal</span></div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- THE BANK EXAMPLE -->
+  <h2>The "Bank" Problem — Why Context Changed Everything</h2>
+
+  <p>The most concrete example of why static vectorization fails is the word "bank." In traditional BoW or TF-IDF, "bank" has one vector — period. The system cannot distinguish whether you mean a financial institution or the side of a river. In a legal or financial application, this causes the model to conflate two completely unrelated concepts.</p>
+
+<pre><code><span class="cm"># Static embedding (Word2Vec / GloVe)
+# "bank" gets ONE vector regardless of context</span>
+
+<span class="cm">sentence_1 = "I deposited money at the bank"
+sentence_2 = "We picnicked on the river bank"
+# Both sentences → "bank" has identical embedding vector
+# cosine_similarity(bank_in_s1, bank_in_s2) = 1.0  ← wrong</span>
+
+<span class="cm"># Contextual embedding (BERT / modern models)
+# "bank" gets DIFFERENT vectors based on surrounding words</span>
+
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer, AutoModel
+<span class="kw">import</span> torch
+
+tokenizer = AutoTokenizer.from_pretrained(<span class="str">"bert-base-uncased"</span>)
+model = AutoModel.from_pretrained(<span class="str">"bert-base-uncased"</span>)
+
+<span class="kw">def</span> <span class="fn">get_word_embedding</span>(sentence: str, target_word: str) -> torch.Tensor:
+    inputs = tokenizer(sentence, return_tensors=<span class="str">"pt"</span>)
+    outputs = model(**inputs)
+    hidden_states = outputs.last_hidden_state[<span class="nb">0</span>]
+    <span class="cm"># Find the token position of the target word</span>
+    tokens = tokenizer.tokenize(sentence)
+    target_idx = tokens.index(target_word) + <span class="nb">1</span>  <span class="cm"># +1 for [CLS]</span>
+    <span class="kw">return</span> hidden_states[target_idx].detach()
+
+emb_financial = <span class="fn">get_word_embedding</span>(<span class="str">"I deposited money at the bank"</span>, <span class="str">"bank"</span>)
+emb_river = <span class="fn">get_word_embedding</span>(<span class="str">"We picnicked on the river bank"</span>, <span class="str">"bank"</span>)
+
+similarity = torch.nn.functional.cosine_similarity(
+    emb_financial.unsqueeze(<span class="nb">0</span>),
+    emb_river.unsqueeze(<span class="nb">0</span>)
+)
+<span class="fn">print</span>(f<span class="str">"Cosine similarity: {similarity.item():.4f}"</span>)
+<span class="cm"># Contextual: ~0.72 (different meaning, not 1.0 and not 0.0)
+# BERT knows they are both "bank" but different senses</span></code></pre>
+
+  <div class="callout emb">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Key Insight:</strong> Static embeddings (Word2Vec, GloVe) give every word one fixed vector regardless of context — "bank" is always "bank." Contextual embeddings (BERT, GPT, modern sentence transformers) generate a different vector for each occurrence based on the surrounding sentence. This is the difference between a dictionary definition and genuine language understanding.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- THE FULL COMPARISON TABLE -->
+  <h2>Full Comparison — Every Dimension That Matters</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="dim-h">Dimension</th>
+          <th class="vec-h">Traditional Vectorization</th>
+          <th class="emb-h">Embeddings</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dim-cell">Vector type</td>
+          <td class="vec-cell">Sparse (mostly zeros)</td>
+          <td class="emb-cell">Dense (all values non-zero)</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Dimensionality</td>
+          <td>= vocabulary size (10K–100K+)</td>
+          <td>64–4,096 (fixed by model design)</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Semantic meaning</td>
+          <td class="bad">None — "cat" and "dog" equidistant</td>
+          <td class="good">Yes — similar meanings cluster together</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Context sensitivity</td>
+          <td class="bad">None — "bank" same in all contexts</td>
+          <td class="good">Contextual models give different vectors per context</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Requires training</td>
+          <td class="good">No — rule-based computation</td>
+          <td class="bad">Yes — large neural network training</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Interpretability</td>
+          <td class="good">High — each dimension = a word</td>
+          <td class="bad">Low — dimensions have no human meaning</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Compute cost (inference)</td>
+          <td class="good">Extremely low — CPU, milliseconds</td>
+          <td class="mid">Medium — GPU recommended for large batches</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Storage cost</td>
+          <td class="bad">High — sparse = large matrices</td>
+          <td class="good">Low — dense = compact matrices</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Out-of-vocabulary words</td>
+          <td class="bad">Unknown word → zero vector</td>
+          <td class="mid">Sub-word models handle most cases (BPE, WordPiece)</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Best for similarity search</td>
+          <td class="bad">Poor — keyword matching only</td>
+          <td class="good">Excellent — semantic search, RAG, recommendations</td>
+        </tr>
+        <tr>
+          <td class="dim-cell">Primary tools</td>
+          <td>scikit-learn CountVectorizer, TfidfVectorizer</td>
+          <td>OpenAI text-embedding-3, BERT, SBERT, Word2Vec, GloVe</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="div">
+
+  <!-- ANALOGIES -->
+  <h2>Two Analogies That Make This <em>Click</em></h2>
+
+  <div class="analogy-grid">
+    <div class="analogy-card a-card-vec">
+      <div class="a-label">Vectorization is like...</div>
+      <div class="analogy-icon">📊</div>
+      <div class="a-title">A Word Frequency Report</div>
+      <div class="a-desc">Imagine you have a book and you count how many times every word appears. You know "the" appears 432 times and "magnificent" appears 3 times. You know nothing about what the book is about. You cannot tell if it is a thriller or a romance. The counts are real data — but they are not understanding.</div>
+    </div>
+    <div class="analogy-card a-card-emb">
+      <div class="a-label">Embeddings are like...</div>
+      <div class="analogy-icon">🗺️</div>
+      <div class="a-title">A Map of Meaning</div>
+      <div class="a-desc">Imagine you could place every word as a pin on a map where proximity means similarity. "Cat" and "dog" would be neighbors. "Paris" and "London" would be neighbors. "King" and "queen" would be neighbors. The map was drawn by a model that read every book ever written — and the distances encode everything it learned.</div>
+    </div>
+  </div>
+
+  <hr class="div">
+
+  <!-- WHEN TO USE WHICH -->
+  <h2>When to Use Which — The Decision Framework</h2>
+
+  <p>The choice between traditional vectorization and embeddings is not about which is "better." It is about which fits your specific constraints: compute budget, data size, semantic requirements, and interpretability needs.</p>
+
+  <div class="use-cases">
+    <div class="uc-label" style="color: var(--vec);">Use traditional vectorization when:</div>
+    <div class="uc-grid">
+      <div class="uc-chip"><span class="dot vec"></span>You need explainability — legal, medical, regulated contexts</div>
+      <div class="uc-chip"><span class="dot vec"></span>Data is small and domain-specific vocabulary is fixed</div>
+      <div class="uc-chip"><span class="dot vec"></span>Speed matters more than semantic accuracy — real-time filtering, spam detection</div>
+      <div class="uc-chip"><span class="dot vec"></span>You are building a simple baseline to measure improvement from</div>
+      <div class="uc-chip"><span class="dot vec"></span>Your team has no GPU budget for embedding inference</div>
+    </div>
+  </div>
+
+  <div class="use-cases" style="margin-top: 20px;">
+    <div class="uc-label" style="color: var(--emb);">Use embeddings when:</div>
+    <div class="uc-grid">
+      <div class="uc-chip"><span class="dot emb"></span>Building semantic search or vector database applications</div>
+      <div class="uc-chip"><span class="dot emb"></span>RAG pipelines — chunks must be retrieved by meaning, not keyword</div>
+      <div class="uc-chip"><span class="dot emb"></span>Recommendation systems — similar items should be near each other</div>
+      <div class="uc-chip"><span class="dot emb"></span>Multilingual applications — BERT-family embeddings transfer across languages</div>
+      <div class="uc-chip"><span class="dot emb"></span>Zero-shot classification — classify without training data</div>
+      <div class="uc-chip"><span class="dot emb"></span>Clustering and topic modeling on heterogeneous document sets</div>
+    </div>
+  </div>
+
+  <div class="callout teal">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>The hybrid approach:</strong> Many production systems use both. TF-IDF for initial candidate retrieval (fast, cheap) followed by embedding-based reranking (accurate, semantic). This is the BM25 + dense retrieval pattern used in hybrid search — you get the speed of vectorization and the accuracy of embeddings.</div>
+  </div>
+
+  <!-- DECISION DIAGRAM -->
+  <div class="decision-box">
+    <div class="visual-label">Decision flowchart — vectorization or embeddings?</div>
+    <svg width="100%" viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <!-- Start -->
+      <rect x="265" y="20" width="150" height="40" rx="20" fill="#1f2937" stroke="none"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#fff" x="340" y="45" text-anchor="middle" font-weight="500">New NLP task</text>
+
+      <line x1="340" y1="60" x2="340" y2="82" stroke="#6b7280" stroke-width="1" marker-end="url(#arr4)"/>
+
+      <!-- Q1 diamond -->
+      <polygon points="340,84 430,114 340,144 250,114" fill="rgba(8,145,178,0.08)" stroke="rgba(8,145,178,0.5)" stroke-width="1"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#0891b2" x="340" y="110" text-anchor="middle">Does meaning/context</text>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#0891b2" x="340" y="125" text-anchor="middle">matter?</text>
+
+      <!-- Yes → right -->
+      <line x1="432" y1="114" x2="530" y2="114" stroke="#7c3aed" stroke-width="1" marker-end="url(#arr4)"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#7c3aed" x="480" y="108">Yes</text>
+
+      <!-- Embeddings box -->
+      <rect x="532" y="88" width="128" height="52" rx="6" fill="rgba(124,58,237,0.08)" stroke="#7c3aed" stroke-width="1"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#7c3aed" x="596" y="110" text-anchor="middle" font-weight="600">Use Embeddings</text>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#7c3aed" x="596" y="128" text-anchor="middle" opacity="0.7">BERT, OpenAI, SBERT</text>
+
+      <!-- No → down -->
+      <line x1="340" y1="144" x2="340" y2="170" stroke="#6b7280" stroke-width="1" marker-end="url(#arr4)"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#6b7280" x="350" y="160">No</text>
+
+      <!-- Q2 diamond -->
+      <polygon points="340,172 430,202 340,232 250,202" fill="rgba(234,88,12,0.06)" stroke="rgba(234,88,12,0.4)" stroke-width="1"/>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#ea580c" x="340" y="198" text-anchor="middle">Need word</text>
+      <text font-family="'Outfit',sans-serif" font-size="12" fill="#ea580c" x="340" y="213" text-anchor="middle">importance?</text>
+
+      <!-- Yes → TF-IDF -->
+      <line x1="432" y1="202" x2="530" y2="202" stroke="#ea580c" stroke-width="1" marker-end="url(#arr4)"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#ea580c" x="480" y="196">Yes</text>
+      <rect x="532" y="176" width="128" height="52" rx="6" fill="rgba(234,88,12,0.07)" stroke="#ea580c" stroke-width="1"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#ea580c" x="596" y="198" text-anchor="middle" font-weight="600">Use TF-IDF</text>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#ea580c" x="596" y="216" text-anchor="middle" opacity="0.7">sklearn TfidfVectorizer</text>
+
+      <!-- No → BoW -->
+      <line x1="340" y1="232" x2="340" y2="258" stroke="#6b7280" stroke-width="1" marker-end="url(#arr4)"/>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#6b7280" x="350" y="248">No</text>
+      <rect x="265" y="260" width="150" height="44" rx="6" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
+      <text font-family="'Outfit',sans-serif" font-size="13" fill="#374151" x="340" y="282" text-anchor="middle" font-weight="600">Use Bag of Words</text>
+      <text font-family="'Outfit',sans-serif" font-size="11" fill="#6b7280" x="340" y="298" text-anchor="middle">CountVectorizer</text>
+    </svg>
+  </div>
+
+  <hr class="div">
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw a comparison diagram with two columns. Left column header in orange: 'Traditional Vectorization'. Right column header in violet: 'Embeddings'. Under each, draw a representation of a word. Left side: show a long sparse vector with mostly 0s and a single 1, labeled 'one-hot: [0,0,1,0,0,0...] — 50,000 dimensions'. Right side: show a short dense vector with all values filled like [0.32, -0.71, 0.18, 0.94...] labeled '768 dimensions'. Below both, show a 2D scatter plot where left side shows 'cat', 'dog', 'Paris', 'Python' all at equal distance (random dots), and right side shows semantic clusters — cat/dog together, Paris/London together, Python/neural together. Add a large arrow in the center pointing right labeled 'Learning replaces rules'. Dark background, minimal clean style."
+  </div>
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-q">"</div>
+    <div class="opinion-text">The confusion between vectorization and embeddings is not just a terminology problem — it is a mental model problem. Developers who think of them as "basically the same thing" end up using TF-IDF for semantic search and wondering why recall is terrible, or using BERT embeddings for a simple keyword filter and burning 100x the compute they need. The taxonomy matters. Vectorization is the category. Embeddings are a specific, learned sub-type. Know the difference and you will make better architecture decisions in 30 seconds that would otherwise take days of debugging to discover.</div>
+    <div class="opinion-attr">— Personal take · Based on ML system design patterns seen across production NLP applications</div>
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>Three Things to Take Away</h2>
+    <p>First: <strong>embeddings are vectorization, but not all vectorization is embeddings.</strong> One-hot encoding, Bag of Words, and TF-IDF are all forms of vectorization. Embeddings are the subset where the vectors are learned by a neural network and are designed to encode semantic meaning. The parent-child relationship is the key conceptual unlock.</p>
+    <p>Second: <strong>the right choice depends on what you need to express.</strong> If your task requires counting or frequency analysis, traditional vectorization is faster, cheaper, and more interpretable. If your task requires understanding meaning, detecting similarity, or working with the kind of language where context determines sense — use embeddings. Most production systems use both.</p>
+    <p>Third: <strong>the evolution from static to contextual embeddings is the most important shift.</strong> Word2Vec was revolutionary but still gave "bank" one fixed vector. BERT and its descendants made embeddings context-sensitive — the same word gets a different vector in a different sentence. That is what makes modern NLP systems actually understand language rather than just pattern-match it.</p>
+    <p style="margin-top: 20px; color: var(--muted); font-size: 15px;">As multimodal embeddings mature — where text, images, and audio share the same vector space — the scope of what "embedding" means is expanding rapidly. Understanding the foundations now will make every future capability much easier to reason about.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-block">
+    <div class="cta-label">Your next step</div>
+    <div class="cta-text">Take any text classification task you have worked on before. If you used TF-IDF, swap it for <code>text-embedding-3-small</code> from OpenAI or <code>all-MiniLM-L6-v2</code> from sentence-transformers. Measure the change in accuracy. Then try it the other way — if you used embeddings for a simple keyword filter, try TF-IDF and measure the latency difference. The numbers will tell you more than any explanation.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <p><strong>Discussion question —</strong> Where are you still using TF-IDF in production? And when you switched from traditional vectorization to embeddings, what was the single biggest accuracy or recall improvement you measured?</p>
+  </div>
+
+  <!-- RELATED -->
+  <span class="related-label">Related posts to write next</span>
+  <div class="related-grid">
+    <div class="related-card">
+      <div class="rc-tag">Tutorial</div>
+      <div class="rc-title">Fine-Tuning Embedding Models for Domain-Specific Semantic Search — A Step-by-Step Guide</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Deep-Dive</div>
+      <div class="rc-title">How Vector Databases Work — Indexing, HNSW, and Why cosine_similarity Is Not Always the Right Metric</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Explainer</div>
+      <div class="rc-title">Tokenization → Vectorization → Embeddings: The Complete NLP Input Pipeline for Beginners</div>
+    </div>
+  </div>
+
+  <!-- SEO -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row"><strong>Primary keyword:</strong> vectorization vs embeddings</div>
+    <div class="seo-row"><strong>URL slug:</strong> <code>/blog/vectorization-vs-embeddings-difference-explained</code></div>
+    <div class="seo-row" style="margin-top:10px"><strong>Secondary keywords:</strong></div>
+    <div class="tag-list" style="margin-bottom:12px">
+      <span class="seo-tag">word embeddings NLP</span>
+      <span class="seo-tag">TF-IDF vs BERT</span>
+      <span class="seo-tag">text vectorization techniques</span>
+      <span class="seo-tag">what is an embedding</span>
+      <span class="seo-tag">bag of words vs word2vec</span>
+    </div>
+    <div class="seo-row"><strong>Tags:</strong></div>
+    <div class="tag-list">
+      <span class="seo-tag">nlp</span>
+      <span class="seo-tag">embeddings</span>
+      <span class="seo-tag">vectorization</span>
+      <span class="seo-tag">machine-learning</span>
+      <span class="seo-tag">bert</span>
+      <span class="seo-tag">word2vec</span>
+      <span class="seo-tag">tfidf</span>
+      <span class="seo-tag">semantic-search</span>
+      <span class="seo-tag">ai-engineering</span>
+    </div>
+    <div style="font-size:13px;color:var(--dim);margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      Sources: Elastic — What are Vector Embeddings · IBM Think — Vector Embedding · MachineLearningMastery — Word Embedding and Text Vectorization Guide · Medium — Differences Between Vectorization and Embeddings in NLP (Chibuzo Nwadike) · Airbyte — Tokenization vs Embeddings · MATLAB Deep Learning Blog — Vectorizing Language with Word and Document Embeddings · Analytics Vidhya — NLP Text Vectorization Approaches
+    </div>
+  </div>
+
+</main>
+
+</body>
+</html>
