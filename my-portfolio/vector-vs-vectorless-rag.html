@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector RAG vs Vectorless RAG — The Complete Production Guide (2026)</title>
+<meta name="description" content="Vector RAG uses embeddings and semantic search. Vectorless RAG uses BM25, keyword search, and structured queries. Neither wins every time. Here's the engineering framework for choosing — and combining — both.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Raleway:ital,wght@0,300;0,400;0,600;0,700;0,900;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f1ec;
+  --bg2: #ebe7df;
+  --bg3: #e0dbd0;
+  --surface: #fdfcf9;
+  --ink: #1a1714;
+  --ink2: #3d3a35;
+  --muted: #6e6a62;
+  --dim: #9e9a91;
+  --border: #d5d0c7;
+  --border2: #c2bdb3;
+
+  /* Vector = deep blue */
+  --vec: #1d4ed8;
+  --vec-mid: #3b82f6;
+  --vec-soft: rgba(29,78,216,0.07);
+  --vec-border: rgba(29,78,216,0.22);
+
+  /* Vectorless = deep orange */
+  --kw: #c2410c;
+  --kw-mid: #ea580c;
+  --kw-soft: rgba(194,65,12,0.07);
+  --kw-border: rgba(194,65,12,0.22);
+
+  /* Hybrid = forest green */
+  --hyb: #15803d;
+  --hyb-soft: rgba(21,128,61,0.07);
+  --hyb-border: rgba(21,128,61,0.22);
+
+  --code-bg: #1a1714;
+  --code-border: #2d2a25;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Raleway', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.78;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ── */
+.header {
+  background: var(--ink);
+  padding: 0;
+  border-bottom: 3px solid var(--vec);
+}
+.header-inner {
+  max-width: 900px; margin: 0 auto;
+  padding: 16px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  background: var(--ink);
+}
+.h-brand {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; color: rgba(255,255,255,0.35);
+  letter-spacing: 0.06em;
+}
+.h-pills { display: flex; gap: 8px; }
+.h-pill {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; letter-spacing: 0.08em; font-weight: 500;
+  padding: 3px 9px; border-radius: 2px; border: 1px solid; text-transform: uppercase;
+}
+.hp-vec { color: var(--vec-mid); border-color: rgba(59,130,246,0.4); background: rgba(29,78,216,0.15); }
+.hp-kw  { color: #fb923c; border-color: rgba(234,88,12,0.4); background: rgba(194,65,12,0.15); }
+.hp-hyb { color: #4ade80; border-color: rgba(21,128,61,0.4); background: rgba(21,128,61,0.15); }
+
+/* ── HERO ── */
+.hero {
+  background: var(--ink);
+  color: #fff;
+  padding: 76px 40px 64px;
+  border-bottom: 1px solid #2d2a25;
+}
+.hero-inner { max-width: 860px; margin: 0 auto; }
+.hero-eyebrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: #fb923c;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 24px;
+}
+.hero-eyebrow::after { content: ''; width: 32px; height: 1px; background: #fb923c; }
+h1 {
+  font-family: 'Raleway', sans-serif;
+  font-size: clamp(36px, 5vw, 58px);
+  font-weight: 900; line-height: 1.06;
+  letter-spacing: -0.03em; color: #fff;
+  margin-bottom: 24px;
+}
+h1 .blue { color: var(--vec-mid); }
+h1 .orange { color: #fb923c; }
+.hero-sub {
+  font-size: 18px; font-weight: 300; color: rgba(255,255,255,0.55);
+  max-width: 620px; line-height: 1.72; margin-bottom: 32px;
+}
+.hero-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; color: rgba(255,255,255,0.3);
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+
+/* ── MAIN ── */
+.main { max-width: 860px; margin: 0 auto; padding: 0 40px 120px; }
+
+h2 {
+  font-family: 'Raleway', sans-serif;
+  font-size: 30px; font-weight: 900;
+  color: var(--ink); line-height: 1.15; letter-spacing: -0.02em;
+  margin: 72px 0 18px;
+}
+h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px; font-weight: 700; color: var(--ink2);
+  margin: 36px 0 12px; letter-spacing: -0.01em;
+}
+p { margin-bottom: 22px; color: var(--ink2); }
+p strong { color: var(--ink); font-weight: 700; }
+a { color: var(--vec); }
+hr.div { border: none; border-top: 1px solid var(--border); margin: 52px 0; }
+
+/* ── TL;DR ── */
+.tldr {
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  border-radius: 4px;
+  border-left: 4px solid var(--ink);
+  padding: 26px 28px; margin: 40px 0;
+}
+.tldr-head {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+}
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-size: 15px; color: var(--ink2);
+  padding-left: 22px; position: relative; line-height: 1.6;
+}
+.tldr li::before { content: '—'; position: absolute; left: 0; color: var(--ink); font-weight: 700; }
+
+/* ── DUEL BOX ── */
+.duel {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; margin: 32px 0;
+  border: 1px solid var(--border2); border-radius: 4px; overflow: hidden;
+}
+.duel-side { padding: 24px 22px; }
+.duel-side.v {
+  border-right: 1px solid var(--border2);
+  border-top: 4px solid var(--vec);
+}
+.duel-side.k { border-top: 4px solid var(--kw); }
+.duel-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.duel-side.v .duel-label { color: var(--vec); }
+.duel-side.k .duel-label { color: var(--kw); }
+.duel-name {
+  font-family: 'Raleway', sans-serif;
+  font-size: 20px; font-weight: 900; color: var(--ink);
+  margin-bottom: 10px; letter-spacing: -0.01em;
+}
+.duel-desc { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+/* ── CALLOUT ── */
+.callout {
+  border-radius: 3px; padding: 16px 20px; margin: 28px 0;
+  display: flex; gap: 14px; border-left: 3px solid;
+  background: var(--surface);
+}
+.callout.vec { border-color: var(--vec); }
+.callout.kw { border-color: var(--kw); }
+.callout.hyb { border-color: var(--hyb); }
+.callout.warn { border-color: #ca8a04; }
+.callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 14.5px; line-height: 1.65; color: var(--ink2); }
+.callout-body strong { color: var(--ink); }
+
+/* ── CODE ── */
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 4px; padding: 22px 24px;
+  overflow-x: auto; margin: 24px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px; line-height: 1.78; color: #e8e3da;
+}
+code {
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+  color: var(--kw); background: var(--kw-soft);
+  border: 1px solid var(--kw-border);
+  padding: 1px 6px; border-radius: 2px;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+.kw-c { color: #c4b5fd; }
+.fn-c { color: #86efac; }
+.str-c { color: #fde68a; }
+.cm-c { color: #52525b; font-style: italic; }
+.nb-c { color: #fdba74; }
+.vc { color: #93c5fd; }
+.kc { color: #f97316; }
+
+/* ── FORMULA ── */
+.formula {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 4px; padding: 20px 24px; margin: 22px 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px; color: var(--ink); text-align: center; line-height: 2;
+}
+.formula .flabel {
+  font-size: 10px; color: var(--dim); display: block;
+  margin-bottom: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-family: 'Space Mono', monospace;
+}
+.formula .parts {
+  font-size: 12px; display: flex; gap: 20px; justify-content: center;
+  flex-wrap: wrap; margin-top: 12px; color: var(--muted);
+}
+.formula .part { text-align: center; }
+.formula .part .pt { font-weight: 700; color: var(--ink); font-size: 13px; }
+.formula .part .pd { font-size: 11px; color: var(--dim); }
+
+/* ── VISUAL BOX ── */
+.visual {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 4px; padding: 28px 24px; margin: 32px 0;
+  overflow-x: auto;
+}
+.visual-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--dim);
+  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px;
+}
+
+/* ── COMPARISON TABLE ── */
+.table-wrap { overflow-x: auto; margin: 28px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left; padding: 11px 14px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; border-bottom: 2px solid var(--ink);
+  color: var(--muted); background: var(--surface);
+  white-space: nowrap;
+}
+th.vh { border-bottom-color: var(--vec); color: var(--vec); }
+th.kh { border-bottom-color: var(--kw); color: var(--kw); }
+th.hh { border-bottom-color: var(--hyb); color: var(--hyb); }
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  color: var(--ink2); line-height: 1.5; vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+td strong { color: var(--ink); font-weight: 600; }
+td.good { color: var(--hyb); font-weight: 600; }
+td.vec-c { color: var(--vec); font-weight: 600; }
+td.kw-c { color: var(--kw); font-weight: 600; }
+td.bad { color: var(--muted); font-style: italic; }
+
+/* ── USE WHEN ── */
+.use-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px; margin: 28px 0;
+}
+.use-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 20px 18px;
+}
+.use-card.vec { border-top: 3px solid var(--vec); }
+.use-card.kw { border-top: 3px solid var(--kw); }
+.use-card.hyb { border-top: 3px solid var(--hyb); grid-column: 1 / -1; }
+.use-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.use-card.vec .use-label { color: var(--vec); }
+.use-card.kw .use-label { color: var(--kw); }
+.use-card.hyb .use-label { color: var(--hyb); }
+.use-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.use-list li {
+  font-size: 14px; color: var(--ink2);
+  padding-left: 16px; position: relative;
+}
+.use-list li::before { content: '→'; position: absolute; left: 0; font-weight: 700; font-size: 12px; }
+.use-card.vec .use-list li::before { color: var(--vec); }
+.use-card.kw .use-list li::before { color: var(--kw); }
+.use-card.hyb .use-list li::before { color: var(--hyb); }
+
+/* ── RRF BOX ── */
+.rrf-box {
+  background: var(--ink); color: #fff;
+  border-radius: 4px; padding: 28px 28px; margin: 32px 0;
+}
+.rrf-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #4ade80; margin-bottom: 14px;
+}
+.rrf-formula {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px; color: #fff; text-align: center;
+  padding: 16px; background: rgba(255,255,255,0.04); border-radius: 3px;
+  margin-bottom: 14px; letter-spacing: 0.02em;
+}
+.rrf-desc { font-size: 14px; color: rgba(255,255,255,0.55); line-height: 1.65; }
+
+/* ── STAT ROW ── */
+.stat-row {
+  display: flex; gap: 14px; flex-wrap: wrap; margin: 28px 0;
+}
+.stat-card {
+  flex: 1; min-width: 160px;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 4px; padding: 18px 16px; text-align: center;
+}
+.stat-num {
+  font-family: 'Raleway', sans-serif;
+  font-size: 38px; font-weight: 900; line-height: 1.1;
+  color: var(--ink); letter-spacing: -0.03em; margin-bottom: 4px;
+}
+.stat-num.blue { color: var(--vec); }
+.stat-num.orange { color: var(--kw); }
+.stat-num.green { color: var(--hyb); }
+.stat-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; color: var(--muted);
+  line-height: 1.4; letter-spacing: 0.02em;
+}
+
+/* ── OPINION ── */
+.opinion {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-left: 5px solid var(--ink);
+  border-radius: 0 4px 4px 0;
+  padding: 32px 30px; margin: 56px 0;
+}
+.opinion-text {
+  font-family: 'Raleway', serif;
+  font-size: 20px; font-weight: 300; font-style: italic;
+  color: var(--ink); line-height: 1.65; margin-bottom: 16px;
+}
+.opinion-attr {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; color: var(--dim);
+}
+
+/* ── EXCALI ── */
+.excali {
+  background: var(--bg2); border: 1px dashed var(--border);
+  border-radius: 4px; padding: 20px 20px; margin: 28px 0;
+  font-size: 14px; color: var(--muted); line-height: 1.7;
+}
+.excali strong {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--hyb); display: block; margin-bottom: 8px;
+}
+
+/* ── CONCLUSION ── */
+.conclusion {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-top: 4px solid var(--ink);
+  border-radius: 0 0 4px 4px;
+  padding: 36px 32px; margin: 56px 0 40px;
+}
+.conclusion h2 { margin-top: 0; }
+
+/* ── CTA ── */
+.cta {
+  background: var(--ink); color: #fff;
+  border-radius: 4px; padding: 28px 28px; margin: 32px 0;
+}
+.cta-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: #4ade80; margin-bottom: 8px;
+}
+.cta-text { font-size: 15.5px; line-height: 1.65; color: rgba(255,255,255,0.72); }
+
+/* ── DISCUSSION ── */
+.discussion {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 22px 22px; margin: 32px 0;
+}
+.discussion p { margin: 0; font-size: 15px; color: var(--ink2); }
+
+/* ── RELATED ── */
+.related-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px; margin-top: 48px; display: block;
+}
+.related-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 12px;
+}
+.related-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; padding: 16px; transition: border-color 0.2s;
+}
+.related-card:hover { border-color: var(--ink); }
+.rc-tag {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--hyb);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
+}
+.rc-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+
+/* ── SEO ── */
+.seo-block { border-top: 1px solid var(--border); margin-top: 64px; padding-top: 28px; }
+.seo-block h3 {
+  font-family: 'Space Mono', monospace; font-size: 10px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
+  font-weight: 700; border: none; margin-top: 0;
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.seo-tag {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--vec);
+  background: var(--vec-soft); border: 1px solid var(--vec-border);
+  padding: 3px 10px; border-radius: 2px;
+}
+.seo-row { font-size: 13px; color: var(--muted); margin-bottom: 8px; font-family: 'Space Mono', monospace; }
+
+@media (max-width: 660px) {
+  .header-inner { padding: 12px 20px; }
+  .hero { padding: 52px 20px 48px; }
+  .main { padding: 0 20px 80px; }
+  h1 { font-size: 32px; }
+  h2 { font-size: 24px; }
+  .duel { grid-template-columns: 1fr; }
+  .duel-side.v { border-right: none; border-bottom: 1px solid var(--border2); }
+  .use-grid { grid-template-columns: 1fr; }
+  .use-card.hyb { grid-column: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div class="h-brand">Agentic AI Engineering · Issue #16</div>
+    <div class="h-pills">
+      <span class="h-pill hp-vec">Vector RAG</span>
+      <span class="h-pill hp-kw">Vectorless RAG</span>
+      <span class="h-pill hp-hyb">Hybrid</span>
+    </div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Explainer + Production Guide · RAG Architecture</div>
+    <h1><span class="blue">Vector</span> RAG<br>vs <span class="orange">Vectorless</span> RAG</h1>
+    <div class="hero-sub">Most RAG tutorials default to embeddings and a vector database. But vectorless retrieval — BM25, full-text search, structured queries — runs faster, costs less, and outperforms vector search on a surprisingly large class of real-world queries. Here is the engineering guide to choosing between them — and when to combine both.</div>
+    <div class="hero-meta">
+      <span>Krishil Agrawal</span>
+      <span>//</span>
+      <span>15 min read · ~3,200 words</span>
+      <span>//</span>
+      <span>April 2026</span>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- INTRO -->
+  <p style="margin-top: 52px;">Every RAG tutorial you have ever read has the same architecture: embed your documents, store them in Pinecone or Qdrant or Chroma, embed the query, do a cosine similarity lookup, retrieve the top-k chunks, pass to the LLM. That is Vector RAG. It is everywhere. And for a significant fraction of real production queries, it is the wrong tool.</p>
+
+  <p>Vectorless RAG does not use embeddings at all. It retrieves using BM25 keyword scoring, full-text inverted indices, SQL queries on structured data, or LLM-driven navigation through document hierarchies. No embedding model, no vector database, no GPU inference budget at query time. In some domains — legal documents, financial filings, product catalogs, code search — vectorless approaches achieve 90%+ of vector RAG performance at a fraction of the cost and latency.</p>
+
+  <p>The production answer in 2026 is almost always hybrid retrieval: run both pipelines in parallel and fuse their results. But to do that well, you need to understand how each method works, where each fails, and how to combine them without creating an over-engineered mess. That is what this post covers.</p>
+
+  <!-- STATS -->
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-num blue">89%</div>
+      <div class="stat-label">of RAG pipelines use vector search as primary retrieval (2025 survey)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num orange">~90%</div>
+      <div class="stat-label">of vector RAG performance achievable with vectorless on structured/legal docs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num green">52%</div>
+      <div class="stat-label">MAP improvement from neural re-ranking on top of hybrid BM25+dense (LiveRAG 2025)</div>
+    </div>
+  </div>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-head">TL;DR — know this before you choose</div>
+    <ul>
+      <li><strong>Vector RAG</strong> converts text to dense embeddings and retrieves by semantic similarity. Best for natural language queries, paraphrased questions, conceptual lookups, and multilingual corpora. Requires an embedding model and a vector database.</li>
+      <li><strong>Vectorless RAG</strong> uses BM25/TF-IDF keyword scoring, inverted indices, or structured SQL queries. Best for exact identifiers, product codes, legal citations, error messages, and any domain where users query with exact terminology.</li>
+      <li><strong>BM25 is not simple TF-IDF.</strong> It adds term frequency saturation (extra mentions contribute diminishing returns) and document length normalization (longer docs are not unfairly rewarded). Two tunable parameters — k₁ and b — give it real control over retrieval behavior.</li>
+      <li><strong>Hybrid retrieval</strong> runs both pipelines in parallel and fuses results via Reciprocal Rank Fusion (RRF). Hybrid is the production standard in 2026 — it provides insurance: when vectors fail for a query, BM25 catches it, and vice versa.</li>
+      <li><strong>Decision rule:</strong> Start with BM25 as your baseline. Add vector search when you measure a recall gap on conceptual or paraphrased queries. Implement hybrid when neither alone satisfies your accuracy requirements.</li>
+    </ul>
+  </div>
+
+  <hr class="div">
+
+  <!-- VECTOR RAG -->
+  <h2>Vector RAG — Semantic Retrieval With Embeddings</h2>
+
+  <div class="duel">
+    <div class="duel-side v">
+      <div class="duel-label">Vector RAG</div>
+      <div class="duel-name">Retrieval by Meaning</div>
+      <div class="duel-desc">Converts documents and queries to dense vectors. Retrieves by cosine similarity or dot product in high-dimensional embedding space. Semantic understanding: "cardiovascular disease" matches "heart attack" even without keyword overlap.</div>
+    </div>
+    <div class="duel-side k">
+      <div class="duel-label">Vectorless RAG</div>
+      <div class="duel-name">Retrieval by Exact Match</div>
+      <div class="duel-desc">Uses BM25 / TF-IDF over an inverted index, SQL queries on structured databases, or LLM-driven tree traversal. No embedding model. No vector database. Fast, cheap, explainable — every retrieved document traces directly to a matched term.</div>
+    </div>
+  </div>
+
+  <p>Vector RAG's core pipeline is now well-established: at index time, each document chunk is passed through an embedding model (BERT, sentence-transformers, OpenAI text-embedding-3) to produce a dense vector, which is stored in a vector database. At query time, the query is embedded with the same model, and approximate nearest neighbor (ANN) search finds the closest vectors by cosine similarity.</p>
+
+<pre><code><span class="kw-c">from</span> sentence_transformers <span class="kw-c">import</span> SentenceTransformer
+<span class="kw-c">import</span> chromadb
+
+model = SentenceTransformer(<span class="str-c">"all-MiniLM-L6-v2"</span>)
+client = chromadb.Client()
+collection = client.create_collection(<span class="str-c">"docs"</span>)
+
+<span class="cm-c"># ── INDEX TIME ──────────────────────────────────────</span>
+docs = [<span class="str-c">"The heart pumps blood through arteries"</span>,
+        <span class="str-c">"Cardiovascular disease is the leading cause of death"</span>,
+        <span class="str-c">"Python is a general-purpose programming language"</span>]
+
+embeddings = model.encode(docs).tolist()
+collection.add(documents=docs, embeddings=embeddings,
+               ids=[<span class="str-c">"d1"</span>, <span class="str-c">"d2"</span>, <span class="str-c">"d3"</span>])
+
+<span class="cm-c"># ── QUERY TIME ──────────────────────────────────────</span>
+query = <span class="str-c">"heart attack symptoms"</span>          <span class="cm-c"># no keyword overlap with docs</span>
+q_emb = model.encode([query]).tolist()
+
+results = collection.query(query_embeddings=q_emb, n_results=<span class="nb-c">2</span>)
+<span class="fn-c">print</span>(results[<span class="str-c">"documents"</span>])
+<span class="cm-c"># Returns: doc1 and doc2 — semantic match, not keyword match
+# "heart attack" → retrieves "cardiovascular disease" even without the words</span></code></pre>
+
+  <div class="callout vec">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>When Vector RAG wins:</strong> Any query where the user's words do not match the document's words but the meaning is the same. "What makes a good leader?" retrieves documents about management and influence. "How do I fix a slow website?" retrieves documents about performance optimization. The embedding space bridges the vocabulary gap.</div>
+  </div>
+
+  <h3>Where Vector RAG Fails</h3>
+  <p>Vector RAG breaks on <strong>exact identifiers</strong>. If a user queries for error code <code>ERR_CERT_AUTHORITY_INVALID</code>, the embedding model maps that string to a vector somewhere in semantic space — but that position has no reliable relationship to documents containing that exact code. The same is true for product SKUs, invoice numbers, legal citation numbers, drug names, and gene identifiers. The embedding model has never learned that these tokens are identity labels, not semantic units.</p>
+
+  <p>It also breaks on <strong>rare domain vocabulary</strong>. A model trained on general web text does not have a precise embedding for "glucocorticoid receptor agonist" or "Section 101(b) of the Patent Act." These phrases may exist in the training data, but the embedding might be unreliable for specialized retrieval. BM25 does not care — it just matches the tokens that are there.</p>
+
+  <hr class="div">
+
+  <!-- VECTORLESS RAG / BM25 -->
+  <h2>Vectorless RAG — How BM25 Actually Works</h2>
+
+  <p>BM25 (Best Matching 25) is not just "keyword search." It is a probabilistic relevance model that ranks documents by answering the question: how much evidence does this document provide that it is about the query topic? It is the default ranking algorithm in Elasticsearch (since v5.0), OpenSearch, and Lucene-based systems worldwide.</p>
+
+  <p>To understand why BM25 is better than simple TF-IDF, you need to understand the two problems TF-IDF cannot solve — and how BM25 fixes both.</p>
+
+  <h3>Problem 1 — Term Frequency Is Not Linear</h3>
+  <p>TF-IDF scores a document linearly with term frequency. A document mentioning "apple" 500 times should not score 50× higher than one mentioning it 10 times — after a certain point, repetition adds almost no evidence of relevance. BM25 introduces a saturation function controlled by parameter <strong>k₁</strong>.</p>
+
+  <div class="visual">
+    <div class="visual-label">BM25 term frequency saturation — k₁ effect (typical k₁ = 1.2 to 2.0)</div>
+    <svg width="100%" viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg">
+      <!-- Axes -->
+      <line x1="60" y1="160" x2="640" y2="160" stroke="#d5d0c7" stroke-width="1"/>
+      <line x1="60" y1="20" x2="60" y2="160" stroke="#d5d0c7" stroke-width="1"/>
+      <!-- Axis labels -->
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="340" y="180" text-anchor="middle">Term Frequency (how many times the word appears)</text>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="20" y="90" text-anchor="middle" transform="rotate(-90 20 90)">Score contribution</text>
+      <!-- TF-IDF line (linear) -->
+      <line x1="60" y1="160" x2="640" y2="20" stroke="#9e9a91" stroke-width="1.5" stroke-dasharray="5 3"/>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="640" y="16" text-anchor="end">TF-IDF (linear)</text>
+      <!-- BM25 curve (saturation) - approximate with polyline -->
+      <polyline points="60,160 110,110 160,86 220,72 290,62 380,54 480,49 580,46 640,44"
+        fill="none" stroke="#c2410c" stroke-width="2.5"/>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#c2410c" x="640" y="42" text-anchor="end">BM25 (saturates)</text>
+      <!-- Annotation: saturation point -->
+      <line x1="220" y1="72" x2="220" y2="160" stroke="rgba(194,65,12,0.3)" stroke-width="1" stroke-dasharray="3 2"/>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#c2410c" x="224" y="155">saturation</text>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#c2410c" x="224" y="145">begins</text>
+      <!-- X axis ticks -->
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="60" y="173" text-anchor="middle">0</text>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="220" y="173" text-anchor="middle">5</text>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="450" y="173" text-anchor="middle">20</text>
+      <text font-family="'Space Mono',monospace" font-size="10" fill="#9e9a91" x="640" y="173" text-anchor="middle">50+</text>
+    </svg>
+  </div>
+
+  <h3>Problem 2 — Long Documents Are Unfairly Rewarded</h3>
+  <p>A 5,000-word document that mentions "neural network" twice should not automatically outrank a 200-word paragraph that mentions it twice. TF-IDF makes this mistake because raw counts favor long documents. BM25 normalizes by document length with parameter <strong>b</strong> (typically 0.75).</p>
+
+  <!-- BM25 FORMULA -->
+  <div class="formula">
+    <span class="flabel">BM25 Scoring Formula (Robertson & Sparck Jones, 1994 → Lucene default since 2016)</span>
+    score(q, d) = Σ IDF(qᵢ) · [ f(qᵢ, d) · (k₁ + 1) ] / [ f(qᵢ, d) + k₁ · (1 − b + b · |d|/avgdl) ]
+    <div class="parts">
+      <div class="part"><div class="pt">f(qᵢ, d)</div><div class="pd">term freq in doc</div></div>
+      <div class="part"><div class="pt">IDF(qᵢ)</div><div class="pd">log((N−n+0.5)/(n+0.5))</div></div>
+      <div class="part"><div class="pt">k₁ ≈ 1.2–2.0</div><div class="pd">saturation speed</div></div>
+      <div class="part"><div class="pt">b ≈ 0.75</div><div class="pd">length normalization</div></div>
+      <div class="part"><div class="pt">|d|/avgdl</div><div class="pd">doc length / avg</div></div>
+    </div>
+  </div>
+
+<pre><code><span class="kw-c">from</span> rank_bm25 <span class="kw-c">import</span> BM25Okapi
+
+<span class="cm-c"># ── INDEX TIME ──────────────────────────────────────
+# No embedding model, no GPU, no vector database
+# Just an inverted index built from token frequencies</span>
+
+docs = [
+    <span class="str-c">"The heart pumps blood through arteries and veins"</span>,
+    <span class="str-c">"Cardiovascular disease is the leading cause of death worldwide"</span>,
+    <span class="str-c">"Python is a general-purpose programming language with clean syntax"</span>,
+    <span class="str-c">"Invoice INV-2024-0042 for client ID 88421 is overdue by 14 days"</span>,
+]
+
+tokenized_docs = [doc.lower().split() <span class="kw-c">for</span> doc <span class="kw-c">in</span> docs]
+bm25 = BM25Okapi(tokenized_docs)
+<span class="cm-c"># k1=1.5 and b=0.75 are BM25Okapi defaults — often left as-is
+
+# ── QUERY TIME ──────────────────────────────────────
+# Query 1: Exact identifier — BM25 WINS, vector fails</span>
+query_id = <span class="str-c">"INV-2024-0042"</span>.lower().split()
+scores_id = bm25.get_scores(query_id)
+<span class="fn-c">print</span>(scores_id)          <span class="cm-c"># doc[3] scores highest — correct!</span>
+<span class="cm-c"># Vector RAG: "INV-2024-0042" embeds to something vague → wrong retrieval
+
+# Query 2: Conceptual — Vector RAG wins, BM25 struggles</span>
+query_sem = <span class="str-c">"myocardial infarction treatment"</span>.lower().split()
+scores_sem = bm25.get_scores(query_sem)
+<span class="fn-c">print</span>(scores_sem)          <span class="cm-c"># No match — "myocardial" ≠ "heart" for BM25
+# Vector RAG: "myocardial infarction" → near "heart disease" in embedding space</span></code></pre>
+
+  <div class="callout kw">
+    <span class="callout-icon">⚡</span>
+    <div class="callout-body"><strong>BM25 is extremely fast.</strong> Inverted index lookup runs in milliseconds even over millions of documents — no GPU, no embedding inference at query time. This makes vectorless RAG the right choice for latency-sensitive applications where query time must stay under 50ms, or for systems that cannot afford embedding infrastructure at scale.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- VECTORLESS TYPES -->
+  <h2>Beyond BM25 — Other Vectorless Retrieval Strategies</h2>
+
+  <p>BM25 is the most common vectorless retrieval mechanism, but it is not the only one. Three other approaches deserve mention for specific use cases.</p>
+
+  <h3>Structured Query Retrieval (SQL / Graph)</h3>
+  <p>When your data lives in a relational database or graph database, the retrieval is not a search problem — it is a query problem. The LLM generates a SQL or Cypher query from the natural language question, the query runs against the database, and the result is passed as context. This approach gives you exact, reproducible retrieval with zero ambiguity. It is called Text-to-SQL and is widely used for financial reporting, inventory management, and analytics use cases.</p>
+
+<pre><code><span class="cm-c"># Text-to-SQL vectorless RAG pattern
+# LLM generates the query, database executes it exactly</span>
+
+system_prompt = <span class="str-c">"""You are a SQL query generator.
+Given a user question and a database schema, write a SQL query.
+Return ONLY the SQL, nothing else.
+
+Schema:
+  invoices(id, client_id, amount, due_date, status)
+  clients(id, name, email, region)"""</span>
+
+user_question = <span class="str-c">"Which invoices for clients in the US are overdue by more than 30 days?"</span>
+
+<span class="cm-c"># LLM returns:
+# SELECT i.id, c.name, i.amount, i.due_date
+# FROM invoices i JOIN clients c ON i.client_id = c.id
+# WHERE c.region = 'US'
+#   AND i.status = 'unpaid'
+#   AND i.due_date < CURRENT_DATE - INTERVAL '30 days'
+
+# The SQL result is then injected into the LLM context for answering
+# Perfect precision, zero hallucination on data values</span></code></pre>
+
+  <h3>Hierarchical Reasoning Navigation</h3>
+  <p>For very large structured documents (legal codes, technical manuals, regulatory filings), an LLM navigates a table-of-contents hierarchy step by step — reading summaries at each level and deciding which sub-section to drill into next. This approach has achieved 98.7% accuracy on professional document tasks in research settings. It requires no embeddings, but it does require multiple LLM calls per query.</p>
+
+  <hr class="div">
+
+  <!-- HYBRID -->
+  <h2>Hybrid Retrieval — Running Both in Parallel</h2>
+
+  <p>The companies winning with RAG in 2026 are not choosing sides. They run both pipelines simultaneously. <strong>Hybrid retrieval is now the production standard for enterprise RAG.</strong> The key insight: BM25 and vector search fail on complementary sets of queries. Running both in parallel gives you coverage that neither achieves alone.</p>
+
+  <p>The standard fusion algorithm is <strong>Reciprocal Rank Fusion (RRF)</strong>. It requires no parameter tuning, handles different score scales naturally (BM25 scores are not comparable to cosine similarities), and is robust to individual retriever failures.</p>
+
+  <!-- RRF BOX -->
+  <div class="rrf-box">
+    <div class="rrf-title">Reciprocal Rank Fusion (RRF) — the fusion algorithm</div>
+    <div class="rrf-formula">RRF_score(d) = Σ_r  1 / (k + rank_r(d))</div>
+    <div class="rrf-desc">For each retriever r, find the rank of document d in its results list. Add 1/(k + rank) for each retriever. The constant k (typically 60) prevents high-ranked documents from dominating. Documents appearing in both retrievers' top results get naturally boosted. Documents present in only one retriever's results still score — they are not eliminated.</div>
+  </div>
+
+<pre><code><span class="kw-c">from</span> langchain.retrievers <span class="kw-c">import</span> BM25Retriever, EnsembleRetriever
+<span class="kw-c">from</span> langchain.vectorstores <span class="kw-c">import</span> Chroma
+<span class="kw-c">from</span> langchain_openai <span class="kw-c">import</span> OpenAIEmbeddings
+
+<span class="cm-c"># ── Build both retrievers ───────────────────────────</span>
+embeddings = OpenAIEmbeddings(model=<span class="str-c">"text-embedding-3-small"</span>)
+vectorstore = Chroma.from_documents(chunks, embeddings)
+
+bm25_retriever = BM25Retriever.from_documents(chunks)
+bm25_retriever.k = <span class="nb-c">5</span>
+
+vector_retriever = vectorstore.as_retriever(search_kwargs={<span class="str-c">"k"</span>: <span class="nb-c">5</span>})
+
+<span class="cm-c"># ── Ensemble = RRF fusion ──────────────────────────
+# weights=[0.5, 0.5] = equal weighting
+# Increase BM25 weight for exact-match heavy domains (legal, code, finance)
+# Increase vector weight for conceptual/conversational domains</span>
+
+ensemble = EnsembleRetriever(
+    retrievers=[bm25_retriever, vector_retriever],
+    weights=[<span class="nb-c">0.5</span>, <span class="nb-c">0.5</span>]
+)
+
+<span class="cm-c"># For keyword-heavy domain (e.g. legal, financial IDs):
+# weights=[0.7, 0.3]  → favor BM25
+
+# For semantic domain (e.g. knowledge base, documentation):
+# weights=[0.3, 0.7]  → favor vectors</span>
+
+docs = ensemble.invoke(<span class="str-c">"What is the penalty for late invoice payment?"</span>)
+<span class="cm-c"># BM25 catches "invoice", "payment", "penalty" exactly
+# Vector catches "contract terms", "interest charges", "default" semantically
+# RRF fusion ranks documents appearing in both retrievers highest</span></code></pre>
+
+  <div class="callout hyb">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Hybrid retrieval benchmark:</strong> A February 2025 hybrid retrieval study on the ObliQA dataset achieved Recall@10 of 0.8333 and MAP@10 of 0.7016 — significantly outperforming BM25 alone (Recall@10: 0.7611, MAP@10: 0.6237). The LiveRAG 2025 challenge showed that neural re-ranking on top of hybrid retrieval improved MAP from 0.523 to 0.797 — a 52% relative improvement — though at significant latency cost (84s vs 1.74s per question).</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- FULL COMPARISON TABLE -->
+  <h2>The Complete Decision Table</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th class="vh">Vector RAG</th>
+          <th class="kh">Vectorless RAG (BM25)</th>
+          <th class="hh">Hybrid</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Retrieval signal</strong></td>
+          <td class="vec-c">Semantic meaning</td>
+          <td class="kw-c">Exact term matches</td>
+          <td class="good">Both</td>
+        </tr>
+        <tr>
+          <td><strong>Query type strength</strong></td>
+          <td>Conceptual, paraphrased, natural language</td>
+          <td>Exact IDs, codes, proper nouns, rare terms</td>
+          <td class="good">All query types</td>
+        </tr>
+        <tr>
+          <td><strong>Infrastructure needed</strong></td>
+          <td>Embedding model + vector DB + GPU (for large batches)</td>
+          <td>Inverted index only (Elasticsearch, OpenSearch)</td>
+          <td>Both (but worth it)</td>
+        </tr>
+        <tr>
+          <td><strong>Index build cost</strong></td>
+          <td>High (embed every chunk)</td>
+          <td class="good">Very low (tokenize + count)</td>
+          <td>Medium-high</td>
+        </tr>
+        <tr>
+          <td><strong>Query latency</strong></td>
+          <td>Medium (embed query → ANN search)</td>
+          <td class="good">Very low (inverted index lookup)</td>
+          <td>Medium (parallel)</td>
+        </tr>
+        <tr>
+          <td><strong>Explainability</strong></td>
+          <td class="bad">Opaque — "nearest neighbors" is not auditable</td>
+          <td class="good">Transparent — every match traces to a term</td>
+          <td>Partial (BM25 leg is transparent)</td>
+        </tr>
+        <tr>
+          <td><strong>Domain specialization</strong></td>
+          <td>May need fine-tuning on rare vocabulary</td>
+          <td class="good">Works immediately on any domain vocabulary</td>
+          <td class="good">Best of both</td>
+        </tr>
+        <tr>
+          <td><strong>Vocabulary mismatch</strong></td>
+          <td class="good">Handles gracefully (semantics bridge the gap)</td>
+          <td class="bad">Fails when query words ≠ document words</td>
+          <td class="good">Hybrid compensates</td>
+        </tr>
+        <tr>
+          <td><strong>Multilingual</strong></td>
+          <td class="good">Works with multilingual embeddings</td>
+          <td class="bad">Requires per-language tokenization</td>
+          <td>Depends on implementation</td>
+        </tr>
+        <tr>
+          <td><strong>Best enterprise use cases</strong></td>
+          <td>Customer support, knowledge bases, general Q&A</td>
+          <td>Legal, finance, medical codes, product search</td>
+          <td class="good">All enterprise RAG at scale</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- USE WHEN -->
+  <h2>The Decision Framework — Use When</h2>
+
+  <div class="use-grid">
+    <div class="use-card vec">
+      <div class="use-label">Use Vector RAG when:</div>
+      <ul class="use-list">
+        <li>Queries are conversational or conceptual — users ask questions in natural language</li>
+        <li>The query vocabulary is unlikely to match the document vocabulary exactly</li>
+        <li>You need multilingual support across a shared embedding space</li>
+        <li>Documents are unstructured and semantically rich (articles, docs, chat logs)</li>
+        <li>You have embedding budget and a vector database already in your stack</li>
+      </ul>
+    </div>
+    <div class="use-card kw">
+      <div class="use-label">Use Vectorless RAG when:</div>
+      <ul class="use-list">
+        <li>Queries include exact identifiers — SKUs, invoice numbers, error codes, citations</li>
+        <li>Your domain vocabulary is highly specialized and rare in general training corpora</li>
+        <li>Latency budget is tight — under 50ms per query</li>
+        <li>Retrieval must be auditable — regulated industries (finance, legal, healthcare)</li>
+        <li>Data is already in a relational or graph database — use SQL/Cypher instead of search</li>
+      </ul>
+    </div>
+    <div class="use-card hyb">
+      <div class="use-label">Use Hybrid Retrieval (the production default) when:</div>
+      <ul class="use-list">
+        <li>Your query mix is heterogeneous — some users type exact codes, others ask conceptual questions</li>
+        <li>You want retrieval insurance — if one method fails on a query, the other compensates</li>
+        <li>You are building an enterprise knowledge base where both precision and recall matter</li>
+        <li>You have established a vector search baseline and measured it failing on specific query types</li>
+        <li>Accuracy requirements are high enough to justify running two parallel retrieval pipelines</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw a side-by-side architecture diagram for Vector RAG vs Vectorless RAG vs Hybrid RAG. Left column (blue): 'Vector RAG' — show: User Query → Embedding Model → Dense Vector → ANN Search in Vector DB → Top-k Chunks → LLM. Middle column (orange): 'Vectorless RAG (BM25)' — show: User Query → Tokenize → Inverted Index Lookup → BM25 Scoring → Ranked Docs → LLM. Right column (green): 'Hybrid RAG' — show both pipelines running in parallel from the same User Query, both feeding into an RRF Fusion step, then → Reranker (optional) → LLM. Below each column, show 2–3 use case chips: Vector = [knowledge base, FAQ, multilingual], Vectorless = [legal codes, product IDs, SQL], Hybrid = [enterprise, mixed query types, high accuracy]. Dark clean background."
+  </div>
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-text">The default-to-vector-embeddings pattern in RAG tutorials has created a generation of systems that are over-engineered for simple retrieval tasks and under-engineered for complex ones. BM25 is not old technology to be deprecated — it is a precision tool that vector search cannot replace for exact-match domains. The best RAG engineers I know start with BM25, measure recall, add vector search when needed, and combine them when both are clearly necessary. They treat retrieval as a measurable engineering problem, not as a technology preference.</div>
+    <div class="opinion-attr">— Personal take · Based on production RAG system design patterns observed across multiple enterprise implementations</div>
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>Three Things to Take Away</h2>
+    <p><strong>First: "vectorless" does not mean "worse."</strong> BM25 retrieves faster, costs less, and is fully explainable. For queries involving exact identifiers, specialized terminology, or structured data, it consistently outperforms vector search. Many production systems would be better served by starting with BM25 as the primary retriever and adding vector search only where it demonstrably improves recall.</p>
+    <p><strong>Second: BM25 is not simple keyword matching.</strong> Its saturation function and document length normalization make it a genuinely sophisticated probabilistic ranking algorithm. The parameters k₁ and b are tunable for your specific document distribution. Understanding how the formula works helps you diagnose retrieval failures and configure it correctly for your domain.</p>
+    <p><strong>Third: Hybrid retrieval is the production answer in 2026.</strong> Reciprocal Rank Fusion is parameter-free, scale-agnostic, and robust to individual retriever failures. Running BM25 and vector search in parallel with RRF fusion gives you the precision of keyword matching and the recall of semantic search simultaneously. The companies shipping reliable enterprise RAG systems are almost all using this pattern.</p>
+    <p style="margin-top: 18px; color: var(--muted); font-size: 15px;">The next optimization layer after hybrid retrieval is cross-encoder reranking — taking the top-N candidates from RRF and scoring them with a more accurate but slower model. The LiveRAG 2025 data showed 52% MAP improvement from this step. Whether that latency cost (84s vs 1.74s) is worth it depends entirely on your application's latency budget.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="cta-label">Your next step</div>
+    <div class="cta-text">Take your current RAG system and add a BM25 retriever alongside your existing vector retriever — using LangChain's EnsembleRetriever or Haystack's HybridRetriever. Run both on 50 representative queries from your actual user base. Measure Recall@5 for each individually and for the hybrid. The data will tell you exactly how much each contributes and whether the engineering investment in hybrid is justified for your specific workload.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <p><strong>Discussion —</strong> What retrieval architecture are you using in production today — pure vector, BM25-first, or hybrid? And which specific query types exposed the failure mode that pushed you toward your current architecture?</p>
+  </div>
+
+  <!-- RELATED -->
+  <span class="related-label">Related posts to write next</span>
+  <div class="related-grid">
+    <div class="related-card">
+      <div class="rc-tag">Tutorial</div>
+      <div class="rc-title">Cross-Encoder Reranking — Turning Hybrid Retrieval Into High-Precision RAG</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Deep-Dive</div>
+      <div class="rc-title">Text-to-SQL RAG — When Your Data Lives in a Database, Not a Vector Store</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Explainer</div>
+      <div class="rc-title">Measuring RAG — Recall@k, MRR, Faithfulness, and How to Build Your Evaluation Suite</div>
+    </div>
+  </div>
+
+  <!-- SEO -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row">Primary keyword: vector RAG vs vectorless RAG</div>
+    <div class="seo-row">URL slug: /blog/vector-rag-vs-vectorless-rag-production-guide</div>
+    <div class="seo-row" style="margin-top:10px">Secondary keywords:</div>
+    <div class="tag-list" style="margin-bottom:12px">
+      <span class="seo-tag">BM25 RAG retrieval</span>
+      <span class="seo-tag">hybrid retrieval RRF</span>
+      <span class="seo-tag">BM25 vs vector search</span>
+      <span class="seo-tag">vectorless RAG 2026</span>
+      <span class="seo-tag">reciprocal rank fusion</span>
+    </div>
+    <div class="seo-row">Tags:</div>
+    <div class="tag-list">
+      <span class="seo-tag">rag</span>
+      <span class="seo-tag">bm25</span>
+      <span class="seo-tag">vector-search</span>
+      <span class="seo-tag">hybrid-retrieval</span>
+      <span class="seo-tag">information-retrieval</span>
+      <span class="seo-tag">langchain</span>
+      <span class="seo-tag">embeddings</span>
+      <span class="seo-tag">ai-engineering</span>
+    </div>
+    <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--dim);margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      Sources: RAG About It — Hybrid Retrieval for Enterprise RAG (Dec 2025) · Paath.online — Vector RAG vs Vectorless RAG 2026 · Aloknecessary.github.io — BM25 vs Vector Search Production Systems (March 2026) · Arpit Bhayani — BM25 Explained (March 2026) · LiveRAG Challenge 2025 (arXiv:2506.22644) — Hybrid BM25+E5 with RRF and RankLLaMA reranking · Elastic Blog — Practical BM25 Part 2 · NetApp Community — Hybrid RAG with BM25 (Jan 2026)
+    </div>
+  </div>
+
+</main>
+</body>
+</html>

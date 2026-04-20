@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Embedding Models Work Under the Hood — A Technical Deep Dive</title>
+<meta name="description" content="What actually happens inside an embedding model? Tokenization, lookup tables, positional encoding, multi-head attention, pooling, contrastive training — every layer explained with diagrams and code.">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090b;
+  --bg2: #111113;
+  --bg3: #18181b;
+  --bg4: #1c1c1f;
+  --surface: #27272a;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --border3: rgba(255,255,255,0.18);
+  --text: #e4e4e7;
+  --text2: #a1a1aa;
+  --text3: #71717a;
+  --dim: #52525b;
+
+  /* Layer colors — one per pipeline stage */
+  --tok: #f97316;    /* tokenization = orange */
+  --tok-s: rgba(249,115,22,0.10);
+  --tok-b: rgba(249,115,22,0.28);
+
+  --emb-lk: #eab308; /* embedding lookup = yellow */
+  --emb-s: rgba(234,179,8,0.10);
+  --emb-b: rgba(234,179,8,0.28);
+
+  --pos: #22d3ee;    /* positional encoding = cyan */
+  --pos-s: rgba(34,211,238,0.10);
+  --pos-b: rgba(34,211,238,0.28);
+
+  --att: #a78bfa;    /* attention = violet */
+  --att-s: rgba(167,139,250,0.10);
+  --att-b: rgba(167,139,250,0.28);
+
+  --ffn: #34d399;    /* feed-forward = emerald */
+  --ffn-s: rgba(52,211,153,0.10);
+  --ffn-b: rgba(52,211,153,0.28);
+
+  --pool: #f472b6;   /* pooling = pink */
+  --pool-s: rgba(244,114,182,0.10);
+  --pool-b: rgba(244,114,182,0.28);
+
+  --con: #fb923c;    /* contrastive = amber */
+  --con-s: rgba(251,146,60,0.10);
+  --con-b: rgba(251,146,60,0.28);
+
+  --code-bg: #0d0d0f;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16.5px;
+  line-height: 1.82;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  border-bottom: 1px solid var(--border);
+  padding: 13px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(9,9,11,0.92);
+  backdrop-filter: blur(16px);
+}
+.topbar-left { display: flex; align-items: center; gap: 14px; }
+.topbar-name {
+  font-size: 13px; font-weight: 500; color: var(--text3);
+  letter-spacing: 0.03em;
+}
+.stage-pill {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+  padding: 2px 8px; border-radius: 3px; border: 1px solid;
+}
+.s-tok { color: var(--tok); border-color: var(--tok-b); background: var(--tok-s); }
+.s-att { color: var(--att); border-color: var(--att-b); background: var(--att-s); }
+.s-pool { color: var(--pool); border-color: var(--pool-b); background: var(--pool-s); }
+.topbar-right {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px; color: var(--dim);
+}
+
+/* ── HERO ── */
+.hero {
+  max-width: 860px; margin: 0 auto;
+  padding: 88px 40px 64px;
+}
+.hero-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--att);
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 28px;
+}
+.hero-label::after { content: ''; width: 36px; height: 1px; background: var(--att); }
+h1 {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: clamp(38px, 5.5vw, 62px);
+  font-weight: 400; line-height: 1.08;
+  letter-spacing: -0.02em; color: #fff;
+  margin-bottom: 28px;
+}
+h1 em { font-style: italic; color: var(--att); }
+.hero-lead {
+  font-size: 18px; font-weight: 300; color: var(--text2);
+  max-width: 640px; line-height: 1.72; margin-bottom: 36px;
+}
+.hero-meta {
+  font-size: 13px; color: var(--dim);
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+}
+.hero-meta .sep { color: var(--border3); }
+
+/* ── PIPELINE OVERVIEW ── */
+.pipeline-overview {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 10px; padding: 28px 24px;
+  margin: 48px 0; overflow-x: auto;
+}
+.pipeline-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 20px;
+}
+
+/* ── MAIN ── */
+.main { max-width: 860px; margin: 0 auto; padding: 0 40px 120px; }
+
+/* ── SECTION HEADERS ── */
+.section-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 3px 10px; border-radius: 4px; border: 1px solid;
+  margin-bottom: 14px; margin-top: 72px; display: flex; width: fit-content;
+}
+.sb-tok { color: var(--tok); border-color: var(--tok-b); background: var(--tok-s); }
+.sb-lk { color: var(--emb-lk); border-color: var(--emb-b); background: var(--emb-s); }
+.sb-pos { color: var(--pos); border-color: var(--pos-b); background: var(--pos-s); }
+.sb-att { color: var(--att); border-color: var(--att-b); background: var(--att-s); }
+.sb-ffn { color: var(--ffn); border-color: var(--ffn-b); background: var(--ffn-s); }
+.sb-pool { color: var(--pool); border-color: var(--pool-b); background: var(--pool-s); }
+.sb-train { color: var(--con); border-color: var(--con-b); background: var(--con-s); }
+
+h2 {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 32px; font-weight: 400;
+  color: #fff; line-height: 1.2; letter-spacing: -0.015em;
+  margin-bottom: 20px;
+}
+h2 em { font-style: italic; }
+h3 {
+  font-family: 'Inter', sans-serif;
+  font-size: 17px; font-weight: 600; color: var(--text);
+  margin: 36px 0 12px;
+}
+p { margin-bottom: 22px; color: var(--text2); }
+p strong { color: var(--text); font-weight: 600; }
+a { color: var(--att); text-decoration: underline; text-underline-offset: 2px; }
+hr.div { border: none; border-top: 1px solid var(--border); margin: 56px 0; }
+
+/* ── TL;DR ── */
+.tldr {
+  border: 1px solid var(--att-b);
+  background: var(--att-s);
+  border-radius: 8px; padding: 26px 28px; margin: 40px 0;
+}
+.tldr-head {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--att); margin-bottom: 14px;
+}
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-size: 14.5px; color: var(--text);
+  padding-left: 20px; position: relative; line-height: 1.65;
+}
+.tldr li::before { content: '›'; position: absolute; left: 0; color: var(--att); font-weight: 700; }
+
+/* ── CALLOUT ── */
+.callout {
+  border-radius: 6px; padding: 16px 20px; margin: 28px 0;
+  display: flex; gap: 14px; border: 1px solid;
+}
+.callout.att { background: var(--att-s); border-color: var(--att-b); }
+.callout.tok { background: var(--tok-s); border-color: var(--tok-b); }
+.callout.pool { background: var(--pool-s); border-color: var(--pool-b); }
+.callout.ffn { background: var(--ffn-s); border-color: var(--ffn-b); }
+.callout.warn { background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.3); }
+.callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 14.5px; line-height: 1.65; color: var(--text2); }
+.callout-body strong { color: var(--text); }
+
+/* ── CODE ── */
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px; padding: 22px 24px;
+  overflow-x: auto; margin: 24px 0;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12.5px; line-height: 1.8; color: #cdd6f4;
+}
+code {
+  font-family: 'Roboto Mono', monospace; font-size: 13px;
+  color: var(--att); background: var(--att-s);
+  border: 1px solid var(--att-b);
+  padding: 1px 6px; border-radius: 3px;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+.kw { color: #cba6f7; }
+.fn { color: #89dceb; }
+.str { color: #a6e3a1; }
+.cm { color: #45475a; font-style: italic; }
+.nb { color: #fab387; }
+.cl { color: #f9e2af; }
+.tok-c { color: #f97316; font-weight: 500; }
+.att-c { color: #a78bfa; }
+.pool-c { color: #f472b6; }
+.ffn-c { color: #34d399; }
+
+/* ── FORMULA BOX ── */
+.formula {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px; padding: 16px 20px; margin: 20px 0;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px; color: var(--att);
+  text-align: center; line-height: 1.8;
+}
+.formula .label {
+  font-size: 11px; color: var(--dim); display: block;
+  margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+/* ── VISUAL BOXES ── */
+.visual-box {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px; padding: 28px 24px; margin: 32px 0;
+  overflow-x: auto;
+}
+.visual-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; color: var(--text3);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+/* ── COMPARISON TABLE ── */
+.table-wrap { overflow-x: auto; margin: 28px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left; padding: 11px 14px; font-size: 11px;
+  font-family: 'Roboto Mono', monospace; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  white-space: nowrap; border-bottom: 1px solid var(--border3);
+  color: var(--text3); background: var(--bg3);
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  color: var(--text2); line-height: 1.55; vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+td.good { color: var(--ffn); font-weight: 500; }
+td.mid { color: var(--emb-lk); font-weight: 500; }
+td.low { color: var(--text3); }
+td strong { color: var(--text); }
+
+/* ── STAGES ROW ── */
+.stages-row {
+  display: flex; gap: 12px; flex-wrap: wrap; margin: 28px 0;
+}
+.stage-box {
+  flex: 1; min-width: 120px;
+  border: 1px solid; border-radius: 6px; padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sb-step {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sb-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.sb-desc { font-size: 12px; line-height: 1.5; color: var(--text3); }
+
+.stage-box.tok { border-color: var(--tok-b); background: var(--tok-s); }
+.stage-box.tok .sb-step { color: var(--tok); }
+.stage-box.lk { border-color: var(--emb-b); background: var(--emb-s); }
+.stage-box.lk .sb-step { color: var(--emb-lk); }
+.stage-box.pos { border-color: var(--pos-b); background: var(--pos-s); }
+.stage-box.pos .sb-step { color: var(--pos); }
+.stage-box.att { border-color: var(--att-b); background: var(--att-s); }
+.stage-box.att .sb-step { color: var(--att); }
+.stage-box.ffn { border-color: var(--ffn-b); background: var(--ffn-s); }
+.stage-box.ffn .sb-step { color: var(--ffn); }
+.stage-box.pool { border-color: var(--pool-b); background: var(--pool-s); }
+.stage-box.pool .sb-step { color: var(--pool); }
+
+/* ── OPINION ── */
+.opinion {
+  border-left: 3px solid var(--att);
+  padding: 28px 28px; margin: 56px 0;
+  background: var(--bg3);
+  border-radius: 0 8px 8px 0;
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.opinion-text {
+  font-family: 'Instrument Serif', serif;
+  font-size: 20px; font-style: italic; color: var(--text);
+  line-height: 1.6; margin-bottom: 14px;
+}
+.opinion-attr { font-size: 13px; color: var(--dim); }
+
+/* ── CONCLUSION ── */
+.conclusion {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 36px 32px; margin: 56px 0 40px;
+}
+.conclusion h2 { margin-top: 0; }
+.conclusion p { color: var(--text2); }
+
+/* ── CTA ── */
+.cta {
+  border: 1px solid var(--att-b); border-radius: 8px;
+  padding: 26px 28px; margin: 32px 0;
+  background: var(--att-s);
+}
+.cta-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--att); margin-bottom: 8px;
+}
+.cta-text { font-size: 15.5px; line-height: 1.65; color: var(--text2); }
+
+/* ── DISCUSSION ── */
+.discussion {
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 22px 22px; margin: 32px 0;
+}
+.discussion p { margin: 0; font-size: 14.5px; color: var(--text2); }
+.discussion p strong { color: var(--text); }
+
+/* ── RELATED ── */
+.related-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px; margin-top: 52px; display: block;
+}
+.related-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;
+}
+.related-card {
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 16px; transition: border-color 0.2s;
+}
+.related-card:hover { border-color: var(--att); }
+.rc-tag {
+  font-family: 'Roboto Mono', monospace; font-size: 10px; color: var(--ffn);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
+}
+.rc-title { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1.4; }
+
+/* ── SEO ── */
+.seo-block {
+  border-top: 1px solid var(--border); margin-top: 64px; padding-top: 28px;
+}
+.seo-block h3 {
+  font-family: 'Roboto Mono', monospace; font-size: 10px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
+  font-weight: 400; border: none; margin-top: 0;
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.seo-tag {
+  font-family: 'Roboto Mono', monospace; font-size: 11px; color: var(--att);
+  background: var(--att-s); border: 1px solid var(--att-b);
+  padding: 3px 10px; border-radius: 3px;
+}
+.seo-row { font-size: 13px; color: var(--text3); margin-bottom: 8px; }
+.seo-row strong { color: var(--text2); font-weight: 500; }
+
+/* ── EXCALI ── */
+.excali {
+  background: var(--bg3); border: 1px dashed var(--border2);
+  border-radius: 6px; padding: 20px 20px; margin: 28px 0;
+  font-size: 14px; color: var(--text3); line-height: 1.7;
+}
+.excali strong {
+  font-family: 'Roboto Mono', monospace; font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--att);
+  display: block; margin-bottom: 8px;
+}
+
+@media (max-width: 660px) {
+  .hero { padding: 56px 20px 48px; }
+  .main { padding: 0 20px 80px; }
+  .topbar { padding: 12px 20px; }
+  h1 { font-size: 34px; }
+  h2 { font-size: 26px; }
+  .stages-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-name">Agentic AI Engineering</span>
+    <span class="stage-pill s-tok">Tokenization</span>
+    <span class="stage-pill s-att">Attention</span>
+    <span class="stage-pill s-pool">Pooling</span>
+  </div>
+  <span class="topbar-right">Issue #15 · April 2026</span>
+</div>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-label">Deep-Dive · ML Internals · NLP Engineering</div>
+  <h1>How Embedding Models Work<br><em>Under the Hood</em></h1>
+  <div class="hero-lead">You have used embeddings to build RAG systems, semantic search, and vector databases. But what actually happens inside the model when you call <code>model.encode("hello")</code>? Here is every layer — from raw text to final vector — explained with precision.</div>
+  <div class="hero-meta">
+    <span>Krishil Agrawal</span>
+    <span class="sep">·</span>
+    <span>16 min read · ~3,400 words</span>
+    <span class="sep">·</span>
+    <span>For: ML engineers · AI developers</span>
+  </div>
+</header>
+
+<!-- PIPELINE OVERVIEW -->
+<div style="max-width:860px;margin:0 auto;padding:0 40px;">
+<div class="pipeline-overview">
+  <div class="pipeline-label">Complete embedding pipeline — 6 stages from raw text to final vector</div>
+  <svg width="100%" viewBox="0 0 780 80" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="pa" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M1 1L6 4L1 7" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+    <!-- Stage 1: Tokenize -->
+    <rect x="0" y="18" width="108" height="44" rx="6" fill="rgba(249,115,22,0.12)" stroke="rgba(249,115,22,0.35)" stroke-width="1"/>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="#f97316" x="54" y="35" text-anchor="middle" letter-spacing="0.06">TOKENIZE</text>
+    <text font-family="Inter,sans-serif" font-size="12" fill="#e4e4e7" x="54" y="52" text-anchor="middle" font-weight="500">Text → Tokens</text>
+
+    <line x1="110" y1="40" x2="128" y2="40" stroke="rgba(255,255,255,0.2)" stroke-width="1" marker-end="url(#pa)"/>
+
+    <!-- Stage 2: Lookup -->
+    <rect x="130" y="18" width="108" height="44" rx="6" fill="rgba(234,179,8,0.10)" stroke="rgba(234,179,8,0.3)" stroke-width="1"/>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="#eab308" x="184" y="35" text-anchor="middle" letter-spacing="0.06">LOOKUP</text>
+    <text font-family="Inter,sans-serif" font-size="12" fill="#e4e4e7" x="184" y="52" text-anchor="middle" font-weight="500">IDs → Vectors</text>
+
+    <line x1="240" y1="40" x2="258" y2="40" stroke="rgba(255,255,255,0.2)" stroke-width="1" marker-end="url(#pa)"/>
+
+    <!-- Stage 3: Positional -->
+    <rect x="260" y="18" width="108" height="44" rx="6" fill="rgba(34,211,238,0.10)" stroke="rgba(34,211,238,0.28)" stroke-width="1"/>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="#22d3ee" x="314" y="35" text-anchor="middle" letter-spacing="0.06">POSITION</text>
+    <text font-family="Inter,sans-serif" font-size="12" fill="#e4e4e7" x="314" y="52" text-anchor="middle" font-weight="500">+ Order Signal</text>
+
+    <line x1="370" y1="40" x2="388" y2="40" stroke="rgba(255,255,255,0.2)" stroke-width="1" marker-end="url(#pa)"/>
+
+    <!-- Stage 4: Attention × N -->
+    <rect x="390" y="14" width="120" height="52" rx="6" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.38)" stroke-width="1.2"/>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="#a78bfa" x="450" y="31" text-anchor="middle" letter-spacing="0.06">ATTENTION × N</text>
+    <text font-family="Inter,sans-serif" font-size="12" fill="#e4e4e7" x="450" y="46" text-anchor="middle" font-weight="500">Transformer Blocks</text>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="rgba(167,139,250,0.6)" x="450" y="60" text-anchor="middle">Q·K·V + FFN</text>
+
+    <line x1="512" y1="40" x2="530" y2="40" stroke="rgba(255,255,255,0.2)" stroke-width="1" marker-end="url(#pa)"/>
+
+    <!-- Stage 5: Pool -->
+    <rect x="532" y="18" width="108" height="44" rx="6" fill="rgba(244,114,182,0.10)" stroke="rgba(244,114,182,0.3)" stroke-width="1"/>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="#f472b6" x="586" y="35" text-anchor="middle" letter-spacing="0.06">POOL</text>
+    <text font-family="Inter,sans-serif" font-size="12" fill="#e4e4e7" x="586" y="52" text-anchor="middle" font-weight="500">Tokens → 1 Vec</text>
+
+    <line x1="642" y1="40" x2="660" y2="40" stroke="rgba(255,255,255,0.2)" stroke-width="1" marker-end="url(#pa)"/>
+
+    <!-- Stage 6: Output -->
+    <rect x="662" y="18" width="108" height="44" rx="6" fill="rgba(52,211,153,0.10)" stroke="rgba(52,211,153,0.3)" stroke-width="1"/>
+    <text font-family="'Roboto Mono',monospace" font-size="9" fill="#34d399" x="716" y="35" text-anchor="middle" letter-spacing="0.06">OUTPUT</text>
+    <text font-family="Inter,sans-serif" font-size="12" fill="#e4e4e7" x="716" y="52" text-anchor="middle" font-weight="500">[0.3, -0.7 …]</text>
+  </svg>
+</div>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- INTRO -->
+  <p style="margin-top:32px;">Every RAG system, every semantic search engine, every vector database starts with the same black box: <code>embedding = model.encode(text)</code>. A sentence goes in. A list of floating-point numbers comes out. And somehow those numbers encode meaning precisely enough that "cat" and "feline" land closer together than "cat" and "skyscraper."</p>
+
+  <p>Most engineers treat that black box exactly as a black box. They tune chunk sizes, try different models, measure recall — but never look inside. That is a problem. When retrieval breaks, when embeddings are unexpectedly similar or dissimilar, when your model performs badly on domain-specific text, the cause is almost always inside the model — and you cannot fix what you cannot see.</p>
+
+  <p>This post opens the box. Every stage of the embedding pipeline, explained with working code and diagrams.</p>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-head">TL;DR — 6 stages, precisely explained</div>
+    <ul>
+      <li><strong>Tokenization:</strong> Text is split into sub-word tokens using BPE or WordPiece. Each token gets a unique integer ID from the vocabulary. "unhappy" might become ["un", "##happy"] — two tokens, not one word.</li>
+      <li><strong>Embedding lookup:</strong> Each token ID is used to retrieve a dense vector row from the model's embedding matrix. This is a simple table lookup — no computation yet. GPT-3's embedding table alone holds ~51 million parameters.</li>
+      <li><strong>Positional encoding:</strong> Since transformers process all tokens in parallel, they have no inherent sense of order. Sinusoidal signals (or learned RoPE rotations) are added to each token vector to encode its position.</li>
+      <li><strong>Multi-head self-attention:</strong> Each token vector is split into Query, Key, and Value. Attention scores (Q·Kᵀ / √d) determine how much each token should "look at" every other token. Multiple heads capture different linguistic relationships in parallel.</li>
+      <li><strong>Feed-forward network:</strong> After attention, each token passes through a two-layer MLP independently. This is where most of the model's "knowledge" is stored — attention finds relationships, FFN processes them.</li>
+      <li><strong>Pooling:</strong> The transformer produces one vector per token. For a single sentence embedding, these are compressed into one vector — via [CLS] token, mean pooling, or max pooling.</li>
+    </ul>
+  </div>
+
+  <!-- STAGE 1: TOKENIZATION -->
+  <div class="section-badge sb-tok">Stage 1 · Tokenization</div>
+  <h2>Step 1: Text Becomes <em>Token IDs</em></h2>
+
+  <p>The first thing an embedding model does has nothing to do with embeddings. It splits your raw text into sub-word units called tokens, then converts each token to an integer ID from its vocabulary. This is tokenization, and it runs entirely before any neural network computation begins.</p>
+
+  <p>Modern models use <strong>Byte Pair Encoding (BPE)</strong> or <strong>WordPiece</strong> — not simple word splitting. The key insight: splitting by words wastes vocabulary on rare forms. "running," "runs," "runner" would each need a separate entry. Sub-word tokenization represents them as shared sub-units, making the vocabulary dramatically more efficient.</p>
+
+<pre><code><span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained(<span class="str">"bert-base-uncased"</span>)
+
+text = <span class="str">"The cat sat unhappily"</span>
+tokens = tokenizer.<span class="fn">tokenize</span>(text)
+token_ids = tokenizer.<span class="fn">encode</span>(text)
+
+<span class="fn">print</span>(<span class="str">"Tokens:"</span>, tokens)
+<span class="cm"># ['the', 'cat', 'sat', 'un', '##happily']
+# Notice: "unhappily" → ["un", "##happily"]  (## = continuation of word)
+# "the" stays as one token — common words get their own entry
+
+</span><span class="fn">print</span>(<span class="str">"IDs:"</span>, token_ids)
+<span class="cm"># [101, 1996, 4937, 2938, 4895, 26510, 8512, 102]
+# 101 = [CLS] (start), 102 = [SEP] (end) — BERT adds these automatically
+# Each ID = row index in the embedding matrix (lookup table)</span></code></pre>
+
+  <div class="callout tok">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-body"><strong>Why this matters for RAG:</strong> Most embedding models cap at 512 tokens (BERT) or 128–512 tokens (all-MiniLM-L6-v2). Not words — tokens. A 400-word technical document might produce 600+ tokens after sub-word tokenization. If it exceeds the model's max sequence length, tokens get silently truncated. This is a silent failure mode in RAG chunking that affects many production systems.</div>
+  </div>
+
+  <!-- STAGE 2: EMBEDDING LOOKUP -->
+  <div class="section-badge sb-lk">Stage 2 · Embedding Lookup</div>
+  <h2>Step 2: The Embedding Table — <em>A Trained Dictionary</em></h2>
+
+  <p>After tokenization, each integer ID is converted to a dense vector by looking up a row in a matrix called the <strong>embedding table</strong> (or weight matrix). This is not computation — it is a literal table lookup. Token ID 4937 maps to row 4937 of the matrix. That row is a vector of 768 numbers (for BERT-base), all learned during training.</p>
+
+  <div class="visual-box">
+    <div class="visual-label">Embedding table lookup — token ID → dense vector</div>
+    <svg width="100%" viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg">
+      <!-- Vocab column on left -->
+      <text font-family="'Roboto Mono',monospace" font-size="10" fill="#71717a" x="30" y="26" letter-spacing="0.06">VOCAB (30,522 rows)</text>
+      <rect x="20" y="34" width="140" height="26" rx="3" fill="rgba(249,115,22,0.06)" stroke="rgba(249,115,22,0.2)" stroke-width="0.5"/>
+      <text font-family="'Roboto Mono',monospace" font-size="11" fill="#f97316" x="30" y="52">0   → [CLS]</text>
+      <rect x="20" y="62" width="140" height="26" rx="3" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+      <text font-family="'Roboto Mono',monospace" font-size="11" fill="#52525b" x="30" y="80">…</text>
+      <rect x="20" y="90" width="140" height="26" rx="3" fill="rgba(234,179,8,0.1)" stroke="rgba(234,179,8,0.3)" stroke-width="0.5"/>
+      <text font-family="'Roboto Mono',monospace" font-size="11" fill="#eab308" x="30" y="108">4937 → "cat"</text>
+      <rect x="20" y="118" width="140" height="26" rx="3" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+      <text font-family="'Roboto Mono',monospace" font-size="11" fill="#52525b" x="30" y="136">…</text>
+      <rect x="20" y="146" width="140" height="26" rx="3" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" stroke-width="0.5"/>
+      <text font-family="'Roboto Mono',monospace" font-size="11" fill="#52525b" x="30" y="164">30521 → …</text>
+
+      <!-- Arrow from "cat" row -->
+      <line x1="162" y1="103" x2="240" y2="103" stroke="rgba(234,179,8,0.5)" stroke-width="1.2" marker-end="url(#pa)"/>
+      <text font-family="'Roboto Mono',monospace" font-size="10" fill="#52525b" x="195" y="96" text-anchor="middle">row 4937</text>
+
+      <!-- Dense vector output -->
+      <text font-family="'Roboto Mono',monospace" font-size="10" fill="#71717a" x="244" y="74" letter-spacing="0.06">TOKEN VECTOR (768 dims)</text>
+      <rect x="244" y="82" width="400" height="40" rx="4" fill="rgba(234,179,8,0.08)" stroke="rgba(234,179,8,0.35)" stroke-width="1"/>
+      <text font-family="'Roboto Mono',monospace" font-size="11" fill="#eab308" x="258" y="106">[ 0.312, -0.871, 0.044, 0.558, -0.209, 0.731, ... ] × 768</text>
+
+      <text font-family="Inter,sans-serif" font-size="12" fill="#71717a" x="244" y="148">This vector is not the final embedding.</text>
+      <text font-family="Inter,sans-serif" font-size="12" fill="#71717a" x="244" y="166">It is the raw input — before context, before attention.</text>
+      <text font-family="Inter,sans-serif" font-size="12" fill="#71717a" x="244" y="184">"cat" here is identical whether followed by "food" or "nap."</text>
+      <text font-family="Inter,sans-serif" font-size="12" fill="#71717a" x="244" y="202">Context comes from the transformer layers next.</text>
+    </svg>
+  </div>
+
+  <p>This lookup table is enormous. For a model with 50,000-token vocabulary and 1,024 dimensions per token, the embedding table holds 51.2 million parameters — just for this one table. Every one of those numbers was optimized during training. <strong>The embedding table is where much of the model's "knowledge" starts.</strong></p>
+
+  <!-- STAGE 3: POSITIONAL ENCODING -->
+  <div class="section-badge sb-pos">Stage 3 · Positional Encoding</div>
+  <h2>Step 3: Teaching the Model <em>Word Order</em></h2>
+
+  <p>Here is the fundamental problem with transformers: they process all tokens simultaneously, in parallel. There is no inherent concept of "this token came before that token." Without intervention, "The cat bit the dog" and "The dog bit the cat" would produce identical representations — because they have the same tokens, just reordered.</p>
+
+  <p>Positional encoding solves this by adding a position signal to each token's vector before it enters the transformer layers. The original 2017 "Attention is All You Need" paper used sinusoidal functions of different frequencies. Modern models like Llama and Mistral use RoPE (Rotary Position Embeddings), which encodes position by rotating the token vectors by an angle proportional to their position.</p>
+
+<pre><code><span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> <span class="fn">sinusoidal_positional_encoding</span>(seq_len: <span class="cl">int</span>, d_model: <span class="cl">int</span>) -> np.ndarray:
+    <span class="str">"""
+    Classic Vaswani et al. positional encoding.
+    Returns shape: (seq_len, d_model)
+    """</span>
+    pos = np.<span class="fn">arange</span>(seq_len)[:, np.newaxis]   <span class="cm"># (seq_len, 1)</span>
+    i   = np.<span class="fn">arange</span>(d_model)[np.newaxis, :]     <span class="cm"># (1, d_model)</span>
+
+    <span class="cm"># Even indices: sine; odd indices: cosine</span>
+    angle_rates = <span class="nb">1</span> / np.<span class="fn">power</span>(<span class="nb">10000</span>, (<span class="nb">2</span> * (i // <span class="nb">2</span>)) / d_model)
+    angle_rads  = pos * angle_rates
+
+    PE = np.<span class="fn">zeros</span>((seq_len, d_model))
+    PE[:, <span class="nb">0</span>::<span class="nb">2</span>] = np.<span class="fn">sin</span>(angle_rads[:, <span class="nb">0</span>::<span class="nb">2</span>])  <span class="cm"># Even → sin</span>
+    PE[:, <span class="nb">1</span>::<span class="nb">2</span>] = np.<span class="fn">cos</span>(angle_rads[:, <span class="nb">1</span>::<span class="nb">2</span>])  <span class="cm"># Odd  → cos</span>
+    <span class="kw">return</span> PE
+
+<span class="cm"># Then: token_embedding += positional_encoding[position]
+# The model can now distinguish position 0 from position 5 from position 50
+# Each position produces a unique pattern of sine waves across all dimensions</span></code></pre>
+
+  <div class="callout att">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>RoPE vs Sinusoidal:</strong> Newer models (Llama, Mistral, Falcon) use Rotary Position Embeddings instead of additive sinusoidal encoding. RoPE encodes position by rotating each token vector by an angle proportional to its position. The key advantage: relative positions are encoded by the angle difference between vectors, which dot-products naturally compute. This makes RoPE better at handling variable-length sequences and generalizing to longer contexts than seen during training.</div>
+  </div>
+
+  <!-- STAGE 4: ATTENTION -->
+  <div class="section-badge sb-att">Stage 4 · Multi-Head Self-Attention</div>
+  <h2>Step 4: The Attention Mechanism — <em>Every Token Looks at Every Other</em></h2>
+
+  <p>This is the core of the transformer. Self-attention allows each token to incorporate information from all other tokens in the sequence simultaneously. It is how "bank" learns from "river" nearby, or how a pronoun learns what noun it refers to.</p>
+
+  <p>For each token, three vectors are computed by multiplying the token's embedding by three learned weight matrices:</p>
+
+  <div class="stages-row">
+    <div class="stage-box att">
+      <div class="sb-step">Q — Query</div>
+      <div class="sb-name">What am I looking for?</div>
+      <div class="sb-desc">Represents what information this token is seeking from others.</div>
+    </div>
+    <div class="stage-box att">
+      <div class="sb-step">K — Key</div>
+      <div class="sb-name">What do I contain?</div>
+      <div class="sb-desc">Represents what information this token offers to other tokens' queries.</div>
+    </div>
+    <div class="stage-box att">
+      <div class="sb-step">V — Value</div>
+      <div class="sb-name">What do I actually pass on?</div>
+      <div class="sb-desc">The actual content transferred when attention selects this token.</div>
+    </div>
+  </div>
+
+  <div class="formula">
+    <span class="label">Scaled Dot-Product Attention</span>
+    Attention(Q, K, V) = softmax( Q · Kᵀ / √d_k ) · V
+  </div>
+
+  <p>The formula says: compute a score for every (query, key) pair by taking their dot product. Divide by √d_k to prevent vanishing gradients in high dimensions. Apply softmax to convert scores to probabilities. Multiply by V to get the weighted sum of values. The result: each token's output is a blend of all other token values, weighted by how much it "paid attention" to each one.</p>
+
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> math
+
+<span class="kw">class</span> <span class="cl">SingleHeadAttention</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model: <span class="cl">int</span>, d_k: <span class="cl">int</span>):
+        <span class="fn">super</span>().__init__()
+        self.d_k = d_k
+        <span class="cm"># Three learned projection matrices</span>
+        self.W_q = nn.<span class="fn">Linear</span>(d_model, d_k, bias=<span class="kw">False</span>)
+        self.W_k = nn.<span class="fn">Linear</span>(d_model, d_k, bias=<span class="kw">False</span>)
+        self.W_v = nn.<span class="fn">Linear</span>(d_model, d_k, bias=<span class="kw">False</span>)
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x: torch.Tensor) -> torch.Tensor:
+        <span class="cm"># x shape: (batch, seq_len, d_model)</span>
+        Q = self.W_q(x)    <span class="cm"># (batch, seq_len, d_k)</span>
+        K = self.W_k(x)    <span class="cm"># (batch, seq_len, d_k)</span>
+        V = self.W_v(x)    <span class="cm"># (batch, seq_len, d_k)</span>
+
+        <span class="cm"># Attention scores: every token attends to every other token</span>
+        scores = torch.<span class="fn">matmul</span>(Q, K.transpose(-<span class="nb">2</span>, -<span class="nb">1</span>)) / math.<span class="fn">sqrt</span>(self.d_k)
+        <span class="cm"># scores shape: (batch, seq_len, seq_len) ← the full attention matrix</span>
+
+        weights = torch.nn.functional.<span class="fn">softmax</span>(scores, dim=-<span class="nb">1</span>)
+        <span class="cm"># Each row sums to 1.0: how much does token i attend to each other token?</span>
+
+        output = torch.<span class="fn">matmul</span>(weights, V)
+        <span class="cm"># Each token's output is now context-aware: a weighted blend of all values</span>
+        <span class="kw">return</span> output</code></pre>
+
+  <h3>Multi-Head Attention: Running Many "Perspectives" in Parallel</h3>
+  <p>One attention head captures one type of relationship — maybe syntactic dependencies. Another might capture semantic similarity. A third might track coreference. <strong>Multi-head attention runs H independent attention heads in parallel</strong>, each with its own Q/K/V matrices, then concatenates their outputs.</p>
+
+<pre><code><span class="kw">class</span> <span class="cl">MultiHeadAttention</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model: <span class="cl">int</span>, num_heads: <span class="cl">int</span>):
+        <span class="fn">super</span>().__init__()
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads  <span class="cm"># Split model dim across heads</span>
+
+        <span class="cm"># All heads' Q, K, V computed together for efficiency</span>
+        self.W_q = nn.<span class="fn">Linear</span>(d_model, d_model)
+        self.W_k = nn.<span class="fn">Linear</span>(d_model, d_model)
+        self.W_v = nn.<span class="fn">Linear</span>(d_model, d_model)
+        self.W_o = nn.<span class="fn">Linear</span>(d_model, d_model)  <span class="cm"># Output projection</span>
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, C = x.<span class="fn">shape</span>   <span class="cm"># batch, seq_len, d_model</span>
+
+        Q = self.W_q(x).<span class="fn">view</span>(B, T, self.num_heads, self.d_k).<span class="fn">transpose</span>(<span class="nb">1</span>, <span class="nb">2</span>)
+        K = self.W_k(x).<span class="fn">view</span>(B, T, self.num_heads, self.d_k).<span class="fn">transpose</span>(<span class="nb">1</span>, <span class="nb">2</span>)
+        V = self.W_v(x).<span class="fn">view</span>(B, T, self.num_heads, self.d_k).<span class="fn">transpose</span>(<span class="nb">1</span>, <span class="nb">2</span>)
+        <span class="cm"># Shape after reshape: (batch, num_heads, seq_len, d_k)</span>
+        <span class="cm"># Each head sees a different projection of the same token</span>
+
+        scores = torch.<span class="fn">matmul</span>(Q, K.<span class="fn">transpose</span>(-<span class="nb">2</span>, -<span class="nb">1</span>)) / math.<span class="fn">sqrt</span>(self.d_k)
+        weights = scores.<span class="fn">softmax</span>(dim=-<span class="nb">1</span>)
+        attn = torch.<span class="fn">matmul</span>(weights, V)   <span class="cm"># (B, num_heads, T, d_k)</span>
+
+        <span class="cm"># Concatenate all heads back together</span>
+        attn = attn.<span class="fn">transpose</span>(<span class="nb">1</span>, <span class="nb">2</span>).<span class="fn">contiguous</span>().<span class="fn">view</span>(B, T, C)
+        <span class="kw">return</span> self.W_o(attn)  <span class="cm"># Final linear projection → (B, T, d_model)</span>
+
+<span class="cm"># BERT-base: 12 heads, d_model=768, d_k=64 per head
+# GPT-2 small: 12 heads, d_model=768, 12 transformer blocks</span></code></pre>
+
+  <!-- STAGE 5: FFN -->
+  <div class="section-badge sb-ffn">Stage 5 · Feed-Forward Network</div>
+  <h2>Step 5: The FFN — Where Knowledge <em>Gets Processed</em></h2>
+
+  <p>After attention, each token's vector passes through a small, independent 2-layer MLP — the Feed-Forward Network (FFN). Critically, this network runs independently on each token: no cross-token communication happens here. It is applied position-wise.</p>
+
+  <p>The FFN expands the embedding to 4× its dimension, applies a non-linearity (GELU or ReLU), then projects it back. Research suggests this is where much of the model's factual knowledge is stored — attention identifies relationships, FFN processes and transforms the information based on those relationships.</p>
+
+<pre><code><span class="kw">class</span> <span class="cl">FeedForward</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, d_model: <span class="cl">int</span>, expansion: <span class="cl">int</span> = <span class="nb">4</span>):
+        <span class="fn">super</span>().__init__()
+        self.net = nn.<span class="fn">Sequential</span>(
+            nn.<span class="fn">Linear</span>(d_model, d_model * expansion),  <span class="cm"># 768 → 3072</span>
+            nn.<span class="fn">GELU</span>(),                                <span class="cm"># non-linearity</span>
+            nn.<span class="fn">Linear</span>(d_model * expansion, d_model),  <span class="cm"># 3072 → 768</span>
+        )
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x: torch.Tensor) -> torch.Tensor:
+        <span class="kw">return</span> self.net(x)  <span class="cm"># Applied independently to each token position</span>
+
+<span class="cm"># Full transformer block = MultiHeadAttention + FFN + LayerNorm + Residuals
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model, num_heads):
+        super().__init__()
+        self.attn = MultiHeadAttention(d_model, num_heads)
+        self.ffn  = FeedForward(d_model)
+        self.ln1  = nn.LayerNorm(d_model)  # Stabilizes training
+        self.ln2  = nn.LayerNorm(d_model)
+
+    def forward(self, x):
+        # Residual connections: add input directly to output
+        # Prevents vanishing gradients in deep networks
+        x = x + self.attn(self.ln1(x))   # Attention sub-layer
+        x = x + self.ffn(self.ln2(x))    # FFN sub-layer
+        return x
+# Stack N of these blocks: BERT-base = 12, BERT-large = 24</span></code></pre>
+
+  <!-- STAGE 6: POOLING -->
+  <div class="section-badge sb-pool">Stage 6 · Pooling</div>
+  <h2>Step 6: Compressing N Token Vectors <em>Into One</em></h2>
+
+  <p>After N transformer blocks, you have one 768-dimensional vector per token. A 10-word sentence becomes 10 vectors. But semantic search needs exactly one vector per document. Pooling collapses the sequence into a single embedding. There are three main strategies, each with different tradeoffs.</p>
+
+<pre><code><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer, AutoModel
+
+tokenizer = AutoTokenizer.from_pretrained(<span class="str">"bert-base-uncased"</span>)
+model = AutoModel.from_pretrained(<span class="str">"bert-base-uncased"</span>)
+text = <span class="str">"The cat sat on the mat"</span>
+
+encoded = tokenizer(text, return_tensors=<span class="str">"pt"</span>, padding=<span class="kw">True</span>, truncation=<span class="kw">True</span>)
+<span class="kw">with</span> torch.no_grad():
+    output = model(**encoded)
+
+last_hidden = output.last_hidden_state  <span class="cm"># (1, seq_len, 768)</span>
+
+<span class="cm"># ── STRATEGY 1: [CLS] Token Pooling ──────────────────────────────────────
+# BERT's special [CLS] token is prepended to every sequence.
+# It is designed to aggregate sequence-level information.
+# Simple and fast. Works best for tasks BERT was fine-tuned on.</span>
+cls_embedding = last_hidden[:, <span class="nb">0</span>, :]         <span class="cm"># (1, 768) — take first token</span>
+
+<span class="cm"># ── STRATEGY 2: Mean Pooling (recommended for sentence transformers) ──────
+# Average all token vectors, weighted by attention mask.
+# Ignores [PAD] tokens. More robust signal than CLS for general embeddings.
+# Used by all-MiniLM-L6-v2 and most sentence-transformer models.</span>
+attention_mask = encoded[<span class="str">"attention_mask"</span>]       <span class="cm"># (1, seq_len)</span>
+mask_expanded = attention_mask.unsqueeze(-<span class="nb">1</span>).expand(last_hidden.<span class="fn">size</span>()).float()
+mean_embedding = (
+    torch.<span class="fn">sum</span>(last_hidden * mask_expanded, <span class="nb">1</span>)
+    / torch.<span class="fn">clamp</span>(mask_expanded.<span class="fn">sum</span>(<span class="nb">1</span>), min=<span class="nb">1e-9</span>)
+)                                               <span class="cm"># (1, 768)</span>
+
+<span class="cm"># ── STRATEGY 3: Max Pooling ───────────────────────────────────────────────
+# Take the maximum value across all token positions for each dimension.
+# Captures the "strongest signal" feature in each dimension.
+# Less commonly used. Can over-amplify outlier tokens.</span>
+max_embedding = torch.<span class="fn">max</span>(last_hidden, dim=<span class="nb">1</span>)[<span class="nb">0</span>]  <span class="cm"># (1, 768)</span>
+
+<span class="fn">print</span>(f<span class="str">"[CLS] embedding shape: {cls_embedding.shape}"</span>)    <span class="cm"># torch.Size([1, 768])</span>
+<span class="fn">print</span>(f<span class="str">"Mean embedding shape:  {mean_embedding.shape}"</span>)  <span class="cm"># torch.Size([1, 768])</span></code></pre>
+
+  <div class="callout pool">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Which pooling to use:</strong> For BERT fine-tuned on downstream tasks, CLS pooling is standard. For general-purpose sentence embeddings with sentence-transformers, mean pooling consistently outperforms CLS on semantic similarity benchmarks — it captures the "average meaning" of the whole sentence rather than relying on one specially designated token. The all-MiniLM-L6-v2 model was trained with contrastive learning and mean pooling specifically for this reason.</div>
+  </div>
+
+  <!-- HOW IT IS TRAINED -->
+  <div class="section-badge sb-train">Training · Contrastive Learning</div>
+  <h2>How the Model Learns: <em>Contrastive Training</em></h2>
+
+  <p>Understanding the architecture is half the picture. Understanding how the model is trained explains why similar sentences end up near each other in embedding space. The training objective directly shapes the geometry of that space.</p>
+
+  <p>Modern embedding models are trained with <strong>contrastive learning</strong>. The core idea: show the model pairs of semantically similar sentences (positive pairs) and pairs of dissimilar sentences (negative pairs). Train it to make similar pairs' embeddings close together (high cosine similarity) and dissimilar pairs far apart (low cosine similarity).</p>
+
+<pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> F
+
+<span class="kw">def</span> <span class="fn">contrastive_loss</span>(
+    embeddings_a: torch.Tensor,   <span class="cm"># (batch, d) — anchor sentences</span>
+    embeddings_b: torch.Tensor,   <span class="cm"># (batch, d) — positive/negative pairs</span>
+    temperature: float = <span class="nb">0.07</span>
+) -> torch.Tensor:
+    <span class="str">"""
+    InfoNCE / SimCLR contrastive loss.
+    In-batch negatives: all pairs (i, j) where i≠j are treated as negatives.
+    Diagonal of similarity matrix = positive pairs.
+    """</span>
+    <span class="cm"># Normalize to unit sphere — cosine sim = dot product after normalization</span>
+    a = F.<span class="fn">normalize</span>(embeddings_a, dim=-<span class="nb">1</span>)
+    b = F.<span class="fn">normalize</span>(embeddings_b, dim=-<span class="nb">1</span>)
+
+    <span class="cm"># (batch, batch) similarity matrix
+    # sim[i][j] = cosine similarity between anchor i and pair j</span>
+    similarity = torch.<span class="fn">matmul</span>(a, b.T) / temperature
+
+    <span class="cm"># Labels: index 0 is the positive for anchor 0, etc.
+    # Cross-entropy pushes diagonal high, off-diagonal low</span>
+    labels = torch.<span class="fn">arange</span>(similarity.<span class="fn">size</span>(<span class="nb">0</span>), device=similarity.device)
+    loss = F.<span class="fn">cross_entropy</span>(similarity, labels)
+    <span class="kw">return</span> loss
+
+<span class="cm"># Example training pair:
+# anchor   = "The cat sat on the mat"
+# positive = "A feline rested upon a rug"   ← semantically similar
+# negatives = all other sentences in the batch (in-batch negatives)
+# After training: cos_sim(anchor, positive) → high
+#                 cos_sim(anchor, negatives) → low</span></code></pre>
+
+  <p>The <strong>all-MiniLM-L6-v2</strong> model was trained on over 1 billion sentence pairs using exactly this contrastive objective. The batch size was 1024, run on a TPU v3-8 for 100,000 steps. At that scale, in-batch negatives means each sentence is contrasted against 1,023 other sentences simultaneously — producing a very strong training signal for learning which sentences are meaningfully similar.</p>
+
+  <div class="callout ffn">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Why BERT out-of-the-box produces poor sentence embeddings:</strong> BERT's pre-training objective was masked language modeling — predict a masked token from context. That objective does not directly optimize for sentence-level similarity. Raw BERT embeddings from the [CLS] token actually underperform averaged GloVe embeddings on semantic similarity benchmarks. Fine-tuning with a contrastive objective is what makes sentence-transformer models work. The architecture stays the same; the training signal changes the geometry of the embedding space entirely.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- PUTTING IT ALL TOGETHER -->
+  <h2>Putting It All Together: <em>One Sentence, Start to Finish</em></h2>
+
+  <p>Here is the complete pipeline for encoding "The cat sat on the mat" with all-MiniLM-L6-v2:</p>
+
+<pre><code><span class="kw">from</span> sentence_transformers <span class="kw">import</span> SentenceTransformer
+<span class="kw">import</span> torch, numpy <span class="kw">as</span> np
+
+<span class="cm"># What this one line hides — every stage shown above runs in sequence:</span>
+model = SentenceTransformer(<span class="str">"all-MiniLM-L6-v2"</span>)
+<span class="cm"># Architecture: 6 transformer layers, 384 dimensions, 12 attention heads
+# Max sequence length: 128 tokens
+# Pooling: mean pooling over all token embeddings</span>
+
+sentences = [
+    <span class="str">"The cat sat on the mat"</span>,
+    <span class="str">"A feline rested on the rug"</span>,
+    <span class="str">"Python is a programming language"</span>,
+]
+
+embeddings = model.<span class="fn">encode</span>(sentences, normalize_embeddings=<span class="kw">True</span>)
+<span class="cm"># Shape: (3, 384) — 3 sentences, each 384 dimensions</span>
+
+<span class="cm"># Step 1: Tokenize each sentence → token IDs + attention mask
+# Step 2: Look up each ID in embedding table (384-dim vectors)
+# Step 3: Add positional encoding signals
+# Step 4: Run through 6 transformer blocks (attention + FFN each)
+# Step 5: Mean-pool all token vectors → one 384-dim vector
+# Step 6: L2-normalize → unit sphere (optional but recommended)
+
+# Verify: similar sentences should be closer</span>
+cos_sim = np.<span class="fn">dot</span>(embeddings[<span class="nb">0</span>], embeddings[<span class="nb">1</span>])   <span class="cm"># cat ↔ feline</span>
+cos_dis = np.<span class="fn">dot</span>(embeddings[<span class="nb">0</span>], embeddings[<span class="nb">2</span>])   <span class="cm"># cat ↔ Python</span>
+
+<span class="fn">print</span>(f<span class="str">"cat ↔ feline:  {cos_sim:.4f}"</span>)  <span class="cm"># ~0.81 — high</span>
+<span class="fn">print</span>(f<span class="str">"cat ↔ Python:  {cos_dis:.4f}"</span>)  <span class="cm"># ~0.12 — low</span></code></pre>
+
+  <!-- POOLING COMPARISON TABLE -->
+  <h3>Pooling Strategies — When to Use Which</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Strategy</th>
+          <th>How it works</th>
+          <th>Performance</th>
+          <th>Best used when</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>[CLS] token</strong></td>
+          <td>Take the first token's final vector</td>
+          <td class="mid">Moderate on STS benchmarks</td>
+          <td>BERT fine-tuned on classification; tasks matching pre-training</td>
+        </tr>
+        <tr>
+          <td><strong>Mean pooling</strong></td>
+          <td>Average all non-padding token vectors</td>
+          <td class="good">Best on general semantic similarity</td>
+          <td>Sentence-level similarity, RAG, semantic search — general default</td>
+        </tr>
+        <tr>
+          <td><strong>Max pooling</strong></td>
+          <td>Max value per dimension across all tokens</td>
+          <td class="low">Inconsistent — sensitive to outliers</td>
+          <td>Rare — occasionally better for specific domain tasks</td>
+        </tr>
+        <tr>
+          <td><strong>Weighted mean</strong></td>
+          <td>Mean weighted by attention mask + optional IDF</td>
+          <td class="good">Good — suppresses common/stop words</td>
+          <td>Keyword-heavy retrieval where rare terms matter more</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="div">
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw a vertical pipeline diagram showing 6 stages of how an embedding model works. Stage 1 (orange): 'Raw Text → Tokenizer → [CLS, The, cat, sat, SEP] — BPE sub-word splitting'. Stage 2 (yellow): 'Token IDs → Embedding Lookup Table → 768-dim dense vectors per token — learned during training'. Stage 3 (cyan): 'Add Positional Encoding — sinusoidal signals added to each token vector — encodes word order'. Stage 4 (violet, largest box): 'N × Transformer Block: Multi-Head Self-Attention (Q·Kᵀ/√d → softmax → ×V) + Feed-Forward Network (d_model → 4d → d_model) + LayerNorm + Residuals'. Stage 5 (pink): 'Pooling: Mean of all token vectors → one 768-dim sentence vector'. Stage 6 (emerald): 'Final Embedding: [0.31, -0.87, ...] — normalized to unit sphere'. Show arrows connecting each stage. Add a note on Stage 4 that this repeats 6 times (BERT-base) or 12 times (BERT-large). Dark background, technical minimal style."
+  </div>
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-text">The most important thing to understand about embedding models is that the architecture is almost secondary — the training objective shapes everything. Two models with identical transformer architectures but different training signals (masked language modeling vs contrastive sentence pairs) will produce embedding spaces with completely different geometry. When your embeddings behave unexpectedly, the first question is not "which model should I use" — it is "what objective was this model trained on, and does that objective match my retrieval task?"</div>
+    <div class="opinion-attr">— Personal take · Based on embedding model behavior observed across production RAG and search systems</div>
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>The Complete Picture</h2>
+    <p>An embedding model runs 6 sequential stages on your text. Tokenization converts raw characters to integer IDs using BPE or WordPiece sub-word splitting. A lookup table converts those IDs to dense initial vectors — each one a row in the model's embedding matrix. Positional encoding adds a unique position signal so the model knows token order. N transformer blocks then run attention (where every token attends to every other, computing Q·Kᵀ/√d scores then blending values) followed by a position-wise FFN that processes each token's enriched representation. Finally, pooling collapses the sequence of token vectors into one sentence vector — usually via mean pooling.</p>
+    <p><strong>The training signal shapes the geometry.</strong> BERT's original MLM objective does not produce good sentence embeddings directly. Contrastive training — where similar pairs are pushed together and dissimilar pairs pulled apart — is what makes modern embedding models like all-MiniLM-L6-v2 actually work for semantic search. When you choose an embedding model, look at how it was trained, not just its architecture or parameter count.</p>
+    <p style="margin-top:16px;color:var(--text3);font-size:14.5px;">Understanding these internals will help you debug retrieval failures, choose pooling strategies correctly, estimate token budget impacts, and reason about why domain-specific fine-tuning improves performance on niche corpora.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="cta-label">Your next step</div>
+    <div class="cta-text">Pull the attention weights from a BERT model on a sentence of your choice and visualize which tokens attend to which others. Use BertViz or write a few lines with <code>output_attentions=True</code>. Watching "bank" shift its attention distribution based on surrounding context is the moment this all becomes concrete — not just theoretical.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <p><strong>Discussion —</strong> What was the specific thing about embedding model internals that surprised you most? For me it was discovering that vanilla BERT CLS embeddings underperform averaged GloVe on sentence similarity — the architecture looks powerful but the training objective determines everything.</p>
+  </div>
+
+  <!-- RELATED -->
+  <span class="related-label">Related posts to write next</span>
+  <div class="related-grid">
+    <div class="related-card">
+      <div class="rc-tag">Tutorial</div>
+      <div class="rc-title">Fine-Tuning Sentence Transformers on Domain-Specific Text — A Complete Training Guide</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Deep-Dive</div>
+      <div class="rc-title">Attention Visualization — Reading What Your Embedding Model Actually Looks At</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Explainer</div>
+      <div class="rc-title">BERT vs Sentence-BERT vs OpenAI Embeddings — When to Use Which for RAG</div>
+    </div>
+  </div>
+
+  <!-- SEO -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row"><strong>Primary keyword:</strong> how embedding models work</div>
+    <div class="seo-row"><strong>URL slug:</strong> <code>/blog/how-embedding-models-work-under-the-hood</code></div>
+    <div class="seo-row" style="margin-top:10px"><strong>Secondary keywords:</strong></div>
+    <div class="tag-list" style="margin-bottom:12px">
+      <span class="seo-tag">transformer embedding internals</span>
+      <span class="seo-tag">self-attention mechanism</span>
+      <span class="seo-tag">contrastive learning embeddings</span>
+      <span class="seo-tag">BERT pooling strategies</span>
+      <span class="seo-tag">sentence transformer architecture</span>
+    </div>
+    <div class="seo-row"><strong>Tags:</strong></div>
+    <div class="tag-list">
+      <span class="seo-tag">embeddings</span>
+      <span class="seo-tag">transformer</span>
+      <span class="seo-tag">bert</span>
+      <span class="seo-tag">attention</span>
+      <span class="seo-tag">nlp</span>
+      <span class="seo-tag">ml-internals</span>
+      <span class="seo-tag">contrastive-learning</span>
+      <span class="seo-tag">rag</span>
+      <span class="seo-tag">ai-engineering</span>
+    </div>
+    <div style="font-size:13px;color:var(--dim);margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      Sources: Dive into Deep Learning — Transformer Architecture · DEV Community — Transformer Architecture Deep Dive (Pranay Bathini, Dec 2025) · Hugging Face all-MiniLM-L6-v2 model card (contrastive training details) · ACM TIST — Contrastive Learning Models for Sentence Representations · Medium — Understanding the Transformer Architecture (Rezowanur Rahman Robin, Aug 2025) · Exxact Blog — Deep Dive into Transformer Architecture · Cloudurable — Inside the Transformer Architecture
+    </div>
+  </div>
+
+</main>
+</body>
+</html>

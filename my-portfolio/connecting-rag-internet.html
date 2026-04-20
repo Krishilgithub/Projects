@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connecting RAG With the Internet — Live Web Retrieval for Production AI Systems</title>
+<meta name="description" content="Static RAG goes stale the moment your training data ends. Here's how to connect your RAG pipeline to live internet data — web search APIs, CRAG fallback architecture, freshness routing, and the full production stack.">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f9fafb;
+  --bg2: #f1f5f9;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --border2: #cbd5e1;
+  --ink: #0f172a;
+  --ink2: #1e293b;
+  --muted: #64748b;
+  --dim: #94a3b8;
+
+  /* Static = slate gray */
+  --static: #475569;
+  --static-soft: rgba(71,85,105,0.08);
+  --static-border: rgba(71,85,105,0.25);
+
+  /* Live/Web = electric cyan-green */
+  --live: #0ea5e9;
+  --live-soft: rgba(14,165,233,0.08);
+  --live-border: rgba(14,165,233,0.25);
+
+  /* CRAG = violet  */
+  --crag: #8b5cf6;
+  --crag-soft: rgba(139,92,246,0.08);
+  --crag-border: rgba(139,92,246,0.25);
+
+  /* Warn = amber */
+  --warn: #f59e0b;
+  --warn-soft: rgba(245,158,11,0.08);
+  --warn-border: rgba(245,158,11,0.25);
+
+  --green: #10b981;
+  --red: #ef4444;
+
+  --code-bg: #0f172a;
+  --code-border: rgba(255,255,255,0.07);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16.5px;
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOP NAV ── */
+.topnav {
+  background: var(--ink);
+  padding: 14px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-brand { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.35); letter-spacing: 0.04em; }
+.nav-pill {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  color: var(--live); background: var(--live-soft);
+  border: 1px solid var(--live-border); padding: 3px 10px; border-radius: 999px;
+}
+
+/* ── HERO ── */
+.hero {
+  background: var(--ink);
+  padding: 80px 40px 60px;
+}
+.hero-inner { max-width: 860px; margin: 0 auto; }
+.hero-eyebrow {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--live);
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 24px;
+}
+.hero-eyebrow::after { content: ''; width: 32px; height: 1px; background: var(--live); }
+h1 {
+  font-family: 'Lora', Georgia, serif;
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600; line-height: 1.1;
+  letter-spacing: -0.02em; color: #fff;
+  margin-bottom: 24px;
+}
+h1 em { font-style: italic; color: var(--live); }
+.hero-sub {
+  font-size: 18px; font-weight: 300; color: rgba(255,255,255,0.55);
+  max-width: 620px; line-height: 1.7; margin-bottom: 32px;
+}
+.hero-meta {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 12px; color: rgba(255,255,255,0.3);
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+/* knowledge freshness bar */
+.freshness-bar {
+  display: flex; gap: 0; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; overflow: hidden; margin-top: 36px;
+}
+.fb-item {
+  flex: 1; padding: 12px 14px;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.fb-item:last-child { border-right: none; }
+.fb-label {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.fb-val { font-size: 15px; font-weight: 600; color: #fff; }
+.fb-static .fb-label { color: var(--static); }
+.fb-live .fb-label { color: var(--live); }
+.fb-crag .fb-label { color: var(--crag); }
+.fb-adapt .fb-label { color: var(--warn); }
+
+/* ── MAIN ── */
+.main { max-width: 860px; margin: 0 auto; padding: 0 40px 120px; }
+
+h2 {
+  font-family: 'Lora', serif;
+  font-size: 30px; font-weight: 600;
+  color: var(--ink); line-height: 1.2; letter-spacing: -0.015em;
+  margin: 68px 0 18px;
+}
+h2 em { font-style: italic; }
+h3 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 17px; font-weight: 700; color: var(--ink2);
+  margin: 36px 0 12px;
+}
+p { margin-bottom: 22px; color: var(--ink2); }
+p strong { color: var(--ink); font-weight: 700; }
+hr.div { border: none; border-top: 1px solid var(--border); margin: 52px 0; }
+
+/* ── TL;DR ── */
+.tldr {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-left: 4px solid var(--live); border-radius: 0 8px 8px 0;
+  padding: 24px 26px; margin: 40px 0;
+}
+.tldr-head {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--live); margin-bottom: 14px;
+}
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-size: 14.5px; color: var(--muted);
+  padding-left: 20px; position: relative; line-height: 1.65;
+}
+.tldr li::before { content: '›'; position: absolute; left: 0; color: var(--live); font-weight: 800; font-size: 16px; line-height: 1.4; }
+
+/* ── SIDE-BY-SIDE ── */
+.compare-split {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px; margin: 28px 0;
+}
+.compare-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 22px 20px;
+}
+.compare-card.static { border-top: 3px solid var(--static); }
+.compare-card.live { border-top: 3px solid var(--live); }
+.cc-badge {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 8px;
+  display: inline-block; padding: 2px 8px; border-radius: 3px;
+}
+.compare-card.static .cc-badge { color: var(--static); background: var(--static-soft); border: 1px solid var(--static-border); }
+.compare-card.live .cc-badge { color: var(--live); background: var(--live-soft); border: 1px solid var(--live-border); }
+.cc-title { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+.cc-desc { font-size: 14px; color: var(--muted); line-height: 1.65; }
+.cc-pros, .cc-cons { margin-top: 14px; }
+.cc-pros-label, .cc-cons-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 6px; font-family: 'Source Code Pro', monospace;
+}
+.cc-pros-label { color: var(--green); }
+.cc-cons-label { color: var(--red); }
+.cc-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.cc-list li { font-size: 13px; color: var(--muted); padding-left: 14px; position: relative; }
+.cc-list.pro li::before { content: '+'; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+.cc-list.con li::before { content: '−'; position: absolute; left: 0; color: var(--red); font-weight: 700; }
+
+/* ── CALLOUT ── */
+.callout {
+  border-radius: 6px; padding: 16px 20px; margin: 28px 0;
+  display: flex; gap: 14px; border: 1px solid;
+}
+.callout.live { background: var(--live-soft); border-color: var(--live-border); }
+.callout.warn { background: var(--warn-soft); border-color: var(--warn-border); }
+.callout.crag { background: var(--crag-soft); border-color: var(--crag-border); }
+.callout.static { background: var(--static-soft); border-color: var(--static-border); }
+.callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 14.5px; line-height: 1.65; color: var(--ink2); }
+.callout-body strong { color: var(--ink); }
+
+/* ── CODE ── */
+pre {
+  background: var(--code-bg); border: 1px solid var(--code-border);
+  border-radius: 8px; padding: 22px 24px;
+  overflow-x: auto; margin: 24px 0;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 12.5px; line-height: 1.8; color: #cbd5e1;
+}
+code {
+  font-family: 'Source Code Pro', monospace; font-size: 13px;
+  color: var(--live); background: var(--live-soft);
+  border: 1px solid var(--live-border); padding: 1px 6px; border-radius: 3px;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; }
+.kw { color: #c084fc; }
+.fn { color: #86efac; }
+.str { color: #fde68a; }
+.cm { color: #475569; font-style: italic; }
+.nb { color: #fdba74; }
+
+/* ── API CARDS ── */
+.api-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; margin: 28px 0;
+}
+.api-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 18px 16px;
+  position: relative; overflow: hidden;
+}
+.api-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--live);
+}
+.api-name { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.api-tagline { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+.api-best {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--live); background: var(--live-soft);
+  border: 1px solid var(--live-border);
+  padding: 2px 8px; border-radius: 3px; display: inline-block;
+}
+.api-price { font-size: 11px; color: var(--dim); margin-top: 8px; }
+
+/* ── TIERED ROUTING VISUAL ── */
+.routing-visual {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 28px 24px; margin: 32px 0;
+  overflow-x: auto;
+}
+.routing-label {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; color: var(--dim); letter-spacing: 0.08em;
+  text-transform: uppercase; margin-bottom: 20px;
+}
+
+/* ── COMPARISON TABLE ── */
+.table-wrap { overflow-x: auto; margin: 28px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left; padding: 11px 14px;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  border-bottom: 2px solid var(--border2); color: var(--muted);
+  background: var(--bg2); white-space: nowrap;
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  color: var(--ink2); line-height: 1.5; vertical-align: top;
+}
+td strong { color: var(--ink); }
+tr:last-child td { border-bottom: none; }
+td.good { color: var(--green); font-weight: 600; }
+td.mid { color: var(--warn); font-weight: 500; }
+td.bad { color: var(--static); }
+
+/* ── CRAG FLOW ── */
+.crag-flow {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 28px 24px; margin: 32px 0;
+  overflow-x: auto;
+}
+
+/* ── OPINION ── */
+.opinion {
+  background: var(--ink); color: #fff;
+  border-radius: 8px; padding: 32px 30px; margin: 56px 0;
+}
+.opinion-text {
+  font-family: 'Lora', serif; font-style: italic;
+  font-size: 20px; color: rgba(255,255,255,0.9);
+  line-height: 1.6; margin-bottom: 14px;
+}
+.opinion-attr { font-family: 'Source Code Pro', monospace; font-size: 11px; color: rgba(255,255,255,0.35); }
+
+/* ── CONCLUSION / CTA ── */
+.conclusion {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-top: 4px solid var(--live); border-radius: 0 0 8px 8px;
+  padding: 36px 32px; margin: 56px 0 40px;
+}
+.conclusion h2 { margin-top: 0; }
+.cta {
+  background: var(--live); border-radius: 8px;
+  padding: 28px 28px; margin: 32px 0;
+}
+.cta-label {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.7); margin-bottom: 8px; font-weight: 700;
+}
+.cta-text { font-size: 16px; line-height: 1.65; color: #fff; font-weight: 500; }
+.discussion {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 22px 22px; margin: 32px 0;
+}
+.discussion p { margin: 0; font-size: 15px; color: var(--muted); }
+.discussion p strong { color: var(--ink); }
+
+/* ── RELATED ── */
+.related-label {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 10px; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px; margin-top: 48px; display: block;
+}
+.related-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.related-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; transition: border-color 0.2s;
+}
+.related-card:hover { border-color: var(--live); }
+.rc-tag { font-family: 'Source Code Pro', monospace; font-size: 10px; color: var(--green); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px; }
+.rc-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+
+/* ── SEO ── */
+.seo-block { border-top: 1px solid var(--border); margin-top: 64px; padding-top: 28px; }
+.seo-block h3 {
+  font-family: 'Source Code Pro', monospace; font-size: 10px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px; border: none; margin-top: 0;
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.seo-tag {
+  font-family: 'Source Code Pro', monospace; font-size: 11px; color: var(--live);
+  background: var(--live-soft); border: 1px solid var(--live-border);
+  padding: 3px 10px; border-radius: 3px;
+}
+.seo-row { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+
+/* ── EXCALI ── */
+.excali {
+  background: var(--bg2); border: 1px dashed var(--border2);
+  border-radius: 6px; padding: 20px 20px; margin: 28px 0;
+  font-size: 14px; color: var(--muted); line-height: 1.7;
+}
+.excali strong {
+  font-family: 'Source Code Pro', monospace; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--crag);
+  display: block; margin-bottom: 8px;
+}
+
+@media (max-width: 660px) {
+  .topnav { padding: 12px 20px; }
+  .hero { padding: 52px 20px 48px; }
+  .main { padding: 0 20px 80px; }
+  h1 { font-size: 32px; }
+  h2 { font-size: 26px; }
+  .compare-split { grid-template-columns: 1fr; }
+  .freshness-bar { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPNAV -->
+<div class="topnav">
+  <div class="nav-brand">Agentic AI Engineering · RAG Series</div>
+  <div class="nav-pill">Internet-Connected RAG</div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Production Guide · Internet RAG · CRAG</div>
+    <h1>Connecting RAG<br>With the <em>Internet</em></h1>
+    <div class="hero-sub">Static knowledge bases go stale the moment training ends. Your LLM knows nothing about what happened last week. Here is how to wire your RAG pipeline to live internet data — and when to actually do it.</div>
+    <div class="hero-meta">
+      <span>Krishil Agrawal</span>
+      <span>//</span>
+      <span>16 min read · ~3,400 words</span>
+      <span>//</span>
+      <span>April 2026</span>
+    </div>
+    <div class="freshness-bar">
+      <div class="fb-item fb-static">
+        <div class="fb-label">Static RAG</div>
+        <div class="fb-val">Knowledge at index time</div>
+      </div>
+      <div class="fb-item fb-live">
+        <div class="fb-label">Web-connected RAG</div>
+        <div class="fb-val">Knowledge updated live</div>
+      </div>
+      <div class="fb-item fb-crag">
+        <div class="fb-label">CRAG / Fallback</div>
+        <div class="fb-val">Internal first, web as backup</div>
+      </div>
+      <div class="fb-item fb-adapt">
+        <div class="fb-label">Adaptive RAG</div>
+        <div class="fb-val">Route by query freshness need</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- INTRO -->
+  <p style="margin-top:52px">Standard RAG has a built-in clock problem. You ingest documents, embed them, store them in a vector database — and the moment you finish, the knowledge is already aging. Ask your system "what is the current price of NVIDIA stock?" and it will answer based on data from your last ingestion run, which might be weeks old. Ask it "what changed in the new OpenAI API last week?" and you will get confident hallucination.</p>
+
+  <p>The fix is not rebuilding your entire stack. It is adding internet retrieval as a layer on top of — or alongside — your existing pipeline. Done correctly, this makes your RAG system genuinely useful for time-sensitive queries while preserving the speed, cost, and auditability of your internal knowledge base for stable content. Done incorrectly, it adds latency, cost, and a new category of hallucination (confidently citing wrong URLs).</p>
+
+  <p>This post covers the architecture choices, the specific tools, and the working code to connect your RAG system to the live internet — and the routing logic that decides when to use internal retrieval versus live web search.</p>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-head">TL;DR</div>
+    <ul>
+      <li><strong>Static RAG goes stale.</strong> Static systems suffer 40–60% higher hallucination rates due to knowledge decay on time-sensitive queries. Any question about current prices, recent events, or latest regulations requires live data.</li>
+      <li><strong>Web search APIs</strong> — Tavily, Exa, Firecrawl, Serper — are the integration layer. They return LLM-ready structured content from the live web, not raw HTML. The right choice depends on whether you need speed (Tavily), semantic understanding (Exa), or full page extraction (Firecrawl).</li>
+      <li><strong>CRAG (Corrective RAG)</strong> is the most robust architecture: retrieve from internal knowledge base first, evaluate retrieval quality, fall back to web search only when internal results are insufficient.</li>
+      <li><strong>Adaptive routing</strong> classifies queries by freshness requirement before retrieval — static internal retrieval for stable content, web search for time-sensitive queries. Reduces unnecessary web API calls by 60–70%.</li>
+      <li><strong>Tiered freshness strategy</strong> — cache stable web results (24–72h), refresh semi-stable content weekly, always live for real-time data — controls costs while keeping latency acceptable.</li>
+    </ul>
+  </div>
+
+  <hr class="div">
+
+  <!-- SECTION 1: THE PROBLEM -->
+  <h2>The <em>Knowledge Decay</em> Problem</h2>
+
+  <p>Every LLM has a training cutoff. Every static knowledge base has an ingestion timestamp. After that moment, the world keeps changing — but your system does not. This is knowledge decay, and it creates a specific failure mode: your system confidently answers time-sensitive questions with outdated information that it cannot distinguish from current facts.</p>
+
+  <div class="compare-split">
+    <div class="compare-card static">
+      <div class="cc-badge">Static RAG</div>
+      <div class="cc-title">Internal Knowledge Base</div>
+      <div class="cc-desc">Documents ingested, chunked, embedded, and indexed. Knowledge is frozen at ingestion time. Retrieval is fast, cheap, and offline. No external dependencies at query time.</div>
+      <div class="cc-pros">
+        <div class="cc-pros-label">Strengths</div>
+        <ul class="cc-list pro">
+          <li>Sub-100ms retrieval latency</li>
+          <li>No external API cost at query time</li>
+          <li>Fully auditable — every chunk is known</li>
+          <li>Works offline, no rate limits</li>
+          <li>Perfect for stable documents (policies, manuals, contracts)</li>
+        </ul>
+      </div>
+      <div class="cc-cons">
+        <div class="cc-cons-label">Limitations</div>
+        <ul class="cc-list con">
+          <li>Stale on current events, prices, regulations</li>
+          <li>40–60% higher hallucination on time-sensitive queries</li>
+          <li>Re-indexing pipeline required for updates</li>
+          <li>Cannot answer "what changed last week?"</li>
+        </ul>
+      </div>
+    </div>
+    <div class="compare-card live">
+      <div class="cc-badge">Web-Connected RAG</div>
+      <div class="cc-title">Live Internet Retrieval</div>
+      <div class="cc-desc">Every query potentially hits the live web via a search API. Knowledge is always current. Higher latency and cost per query. Requires quality filtering — the web contains misinformation.</div>
+      <div class="cc-pros">
+        <div class="cc-pros-label">Strengths</div>
+        <ul class="cc-list pro">
+          <li>Always current — news, prices, new releases</li>
+          <li>No knowledge decay on time-sensitive queries</li>
+          <li>Cites verifiable sources</li>
+          <li>Covers topics not in your internal corpus</li>
+        </ul>
+      </div>
+      <div class="cc-cons">
+        <div class="cc-cons-label">Limitations</div>
+        <ul class="cc-list con">
+          <li>500ms–1s+ added latency per query</li>
+          <li>Cost per API call adds up at scale</li>
+          <li>Web contains misinformation — requires validation</li>
+          <li>Rate limits cap throughput</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div class="callout-body"><strong>The practical rule:</strong> Static RAG is right for documents that do not change — company policies, technical manuals, legal contracts, historical records. Web-connected RAG is right for queries that require knowledge from today, this week, or this month. Most production systems need both, routed by query type.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- SECTION 2: WEB SEARCH APIs -->
+  <h2>The Web Search API Landscape<br><em>(What Actually Powers Live Retrieval)</em></h2>
+
+  <p>The simplest way to connect RAG to the internet is through a web search API — a service that accepts a natural language query and returns structured, LLM-ready content. Not raw HTML. Not a list of links. Pre-extracted, clean text formatted specifically for injection into an LLM context window.</p>
+
+  <p>The landscape in 2026 has consolidated around a few major players. The right choice depends on whether you need speed, semantic understanding, full-page extraction, or cost optimization.</p>
+
+  <div class="api-grid">
+    <div class="api-card">
+      <div class="api-name">Tavily</div>
+      <div class="api-tagline">LLM-native search API. Structured JSON with citation-ready summaries, built for RAG pipelines.</div>
+      <div class="api-best">Best for citation-ready RAG</div>
+      <div class="api-price">Free: 1,000/mo · Paid: $27+/mo</div>
+    </div>
+    <div class="api-card">
+      <div class="api-name">Exa</div>
+      <div class="api-tagline">Neural semantic search. Finds conceptually relevant content even without exact keyword matches.</div>
+      <div class="api-best">Best for semantic research</div>
+      <div class="api-price">Free tier · Paid usage-based</div>
+    </div>
+    <div class="api-card">
+      <div class="api-name">Firecrawl</div>
+      <div class="api-tagline">Search + full page extraction in one call. Autonomous /agent endpoint for multi-step research.</div>
+      <div class="api-best">Best for deep extraction</div>
+      <div class="api-price">Free: 500 credits · Paid from $16/mo</div>
+    </div>
+    <div class="api-card">
+      <div class="api-name">Serper</div>
+      <div class="api-tagline">Google SERP results in clean JSON. Extremely fast and cost-effective for high-volume use.</div>
+      <div class="api-best">Best for high-volume / cost</div>
+      <div class="api-price">Free: 2,500/mo · $1/1k queries</div>
+    </div>
+    <div class="api-card">
+      <div class="api-name">Brave Search</div>
+      <div class="api-tagline">Independent index — not powered by Google or Bing. Privacy-first, no tracking.</div>
+      <div class="api-best">Best for independence / privacy</div>
+      <div class="api-price">$5/1k queries</div>
+    </div>
+    <div class="api-card">
+      <div class="api-name">Perplexity Sonar</div>
+      <div class="api-tagline">Pre-synthesized answers with citations. Returns LLM-generated summaries, not raw results.</div>
+      <div class="api-best">Best for pre-built answers</div>
+      <div class="api-price">$5/1k requests</div>
+    </div>
+  </div>
+
+  <div class="callout live">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Latency matters for interactive agents.</strong> An independent 2026 benchmark showed Tavily averaging ~998ms while Perplexity's Sonar layer averaged 11+ seconds per query. For any user-facing application, 11 seconds per web search call is not viable. For batch research pipelines, it might be acceptable. Always measure under your actual query distribution, not vendor-reported best-case numbers.</div>
+  </div>
+
+  <h3>The simplest possible internet-connected RAG</h3>
+  <p>Before we get to the sophisticated CRAG architecture, here is the minimal integration — a basic web search RAG pipeline with Tavily and LangChain:</p>
+
+<pre><code><span class="kw">from</span> tavily <span class="kw">import</span> TavilyClient
+<span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
+<span class="kw">import</span> os
+
+tavily = TavilyClient(api_key=os.environ[<span class="str">"TAVILY_API_KEY"</span>])
+claude = Anthropic()
+
+<span class="kw">def</span> <span class="fn">web_rag</span>(query: str) -> str:
+    <span class="cm"># Step 1: Search the web with the user's query</span>
+    results = tavily.search(
+        query=query,
+        search_depth=<span class="str">"advanced"</span>,    <span class="cm"># "basic" for speed, "advanced" for depth</span>
+        max_results=<span class="nb">5</span>,
+        include_raw_content=<span class="nb">False</span>   <span class="cm"># True for full page text, False for summaries</span>
+    )
+
+    <span class="cm"># Step 2: Format results into context — Tavily returns structured JSON</span>
+    context = <span class="str">"\n\n"</span>.join([
+        f<span class="str">"Source: {r['url']}\nContent: {r['content']}"</span>
+        <span class="kw">for</span> r <span class="kw">in</span> results[<span class="str">'results'</span>]
+    ])
+
+    <span class="cm"># Step 3: Generate answer grounded in live web context</span>
+    response = claude.messages.create(
+        model=<span class="str">"claude-sonnet-4-6"</span>, max_tokens=<span class="nb">1024</span>,
+        system=<span class="str">"""Answer using ONLY the provided web search results.
+Cite sources with [Source: URL] after each factual claim.
+If results don't contain the answer, say so explicitly."""</span>,
+        messages=[{
+            <span class="str">"role"</span>: <span class="str">"user"</span>,
+            <span class="str">"content"</span>: f<span class="str">"Web search results:\n{context}\n\nQuestion: {query}"</span>
+        }]
+    )
+    <span class="kw">return</span> response.content[<span class="nb">0</span>].text
+
+<span class="cm"># Example:
+# query = "What is the current price of NVIDIA stock?"
+# → Tavily searches live web → Claude answers from retrieved content
+# → No stale knowledge, sources cited</span></code></pre>
+
+  <hr class="div">
+
+  <!-- SECTION 3: CRAG -->
+  <h2>CRAG — Corrective RAG with <em>Web Fallback</em></h2>
+
+  <p>Naive web RAG hits the internet on every query. That is expensive, slow, and unnecessary for queries your internal knowledge base handles perfectly well. Corrective RAG (CRAG) is the smarter architecture: retrieve from internal sources first, evaluate the quality of what you got, and only fall back to web search when internal retrieval is insufficient.</p>
+
+  <p>The CRAG loop has four steps: retrieve, grade, decide, generate. If the grader decides retrieved chunks are relevant and sufficient, answer from internal context. If not — if context is missing, outdated, or low quality — the system rewrites the query, searches the web, and augments or replaces the internal context.</p>
+
+  <!-- CRAG FLOW DIAGRAM -->
+  <div class="crag-flow">
+    <div class="routing-label">CRAG architecture — corrective retrieval with web fallback</div>
+    <svg width="100%" viewBox="0 0 680 310" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ar6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- User Query -->
+      <rect x="270" y="10" width="140" height="40" rx="6" fill="rgba(14,165,233,0.1)" stroke="rgba(14,165,233,0.4)" stroke-width="1"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="13" fill="#0f172a" x="340" y="35" text-anchor="middle" font-weight="700">User Query</text>
+
+      <line x1="340" y1="50" x2="340" y2="74" stroke="#cbd5e1" stroke-width="1" marker-end="url(#ar6)"/>
+
+      <!-- Internal Retrieve -->
+      <rect x="220" y="76" width="240" height="44" rx="6" fill="rgba(71,85,105,0.08)" stroke="rgba(71,85,105,0.3)" stroke-width="1"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="12" fill="#475569" x="340" y="96" text-anchor="middle" font-weight="700">1. Retrieve from internal KB</text>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#94a3b8" x="340" y="113" text-anchor="middle">vector search + BM25 hybrid</text>
+
+      <line x1="340" y1="120" x2="340" y2="144" stroke="#cbd5e1" stroke-width="1" marker-end="url(#ar6)"/>
+
+      <!-- Grader diamond -->
+      <polygon points="340,146 430,176 340,206 250,176" fill="rgba(139,92,246,0.08)" stroke="rgba(139,92,246,0.4)" stroke-width="1"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="12" fill="#8b5cf6" x="340" y="172" text-anchor="middle" font-weight="700">2. Grade relevance</text>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#94a3b8" x="340" y="188" text-anchor="middle">LLM-as-judge: 0–1 score</text>
+
+      <!-- RELEVANT path → right + down to Generate -->
+      <line x1="432" y1="176" x2="540" y2="176" stroke="rgba(16,185,129,0.6)" stroke-width="1.2" marker-end="url(#ar6)"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#10b981" x="485" y="169">score ≥ 0.7</text>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#10b981" x="485" y="182">Relevant</text>
+
+      <!-- Generate box (right) -->
+      <rect x="542" y="152" width="128" height="48" rx="6" fill="rgba(16,185,129,0.1)" stroke="rgba(16,185,129,0.3)" stroke-width="1"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="12" fill="#10b981" x="606" y="172" text-anchor="middle" font-weight="700">4. Generate</text>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#94a3b8" x="606" y="189" text-anchor="middle">from internal context</text>
+
+      <!-- NOT RELEVANT path → down to web search -->
+      <line x1="340" y1="206" x2="340" y2="230" stroke="rgba(14,165,233,0.6)" stroke-width="1.2" marker-end="url(#ar6)"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#0ea5e9" x="352" y="220">score &lt; 0.7</text>
+
+      <!-- Query rewrite -->
+      <rect x="220" y="232" width="240" height="40" rx="6" fill="rgba(14,165,233,0.08)" stroke="rgba(14,165,233,0.3)" stroke-width="1"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="12" fill="#0ea5e9" x="340" y="255" text-anchor="middle" font-weight="700">3. Rewrite query + web search</text>
+
+      <!-- Web search → Generate from web -->
+      <line x1="460" y1="252" x2="540" y2="252" stroke="rgba(14,165,233,0.5)" stroke-width="1.2" marker-end="url(#ar6)"/>
+      <rect x="542" y="228" width="128" height="48" rx="6" fill="rgba(14,165,233,0.1)" stroke="rgba(14,165,233,0.3)" stroke-width="1"/>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="12" fill="#0ea5e9" x="606" y="248" text-anchor="middle" font-weight="700">4. Generate</text>
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="11" fill="#94a3b8" x="606" y="265" text-anchor="middle">from web context</text>
+
+      <!-- Labels -->
+      <text font-family="'Plus Jakarta Sans',sans-serif" font-size="10" fill="#94a3b8" x="340" y="300" text-anchor="middle">Key: internal first → grade → web fallback only when needed</text>
+    </svg>
+  </div>
+
+<pre><code><span class="kw">from</span> langchain_community.retrievers <span class="kw">import</span> TavilySearchAPIRetriever
+<span class="kw">from</span> langchain_anthropic <span class="kw">import</span> ChatAnthropic
+<span class="kw">from</span> langchain.schema <span class="kw">import</span> Document
+<span class="kw">import</span> json
+
+llm = ChatAnthropic(model=<span class="str">"claude-sonnet-4-6"</span>)
+web_retriever = TavilySearchAPIRetriever(k=<span class="nb">5</span>)
+
+<span class="kw">def</span> <span class="fn">grade_relevance</span>(query: str, docs: list[Document]) -> float:
+    <span class="cm">"""LLM-as-judge: scores how relevant retrieved docs are (0-1)."""</span>
+    context = <span class="str">"\n---\n"</span>.join(d.page_content <span class="kw">for</span> d <span class="kw">in</span> docs[:3])
+    response = llm.invoke(f<span class="str">"""Rate how well these documents answer this question.
+Return JSON only: {{"score": 0.0-1.0, "reason": "brief explanation"}}
+
+Question: {query}
+
+Documents:
+{context}"""</span>)
+    <span class="kw">try</span>:
+        result = json.loads(response.content)
+        <span class="kw">return</span> result[<span class="str">"score"</span>]
+    <span class="kw">except</span>:
+        <span class="kw">return</span> <span class="nb">0.5</span>   <span class="cm"># fallback: treat as uncertain</span>
+
+<span class="kw">def</span> <span class="fn">crag_retrieve</span>(query: str, internal_vectorstore) -> tuple[list, str]:
+    <span class="cm">"""
+    CRAG pipeline: internal first, web fallback if quality is low.
+    Returns (docs, source) where source is "internal" or "web"
+    """</span>
+    <span class="cm"># Step 1: Internal retrieval</span>
+    internal_docs = internal_vectorstore.similarity_search(query, k=<span class="nb">5</span>)
+
+    <span class="cm"># Step 2: Grade relevance</span>
+    score = <span class="fn">grade_relevance</span>(query, internal_docs)
+    <span class="fn">print</span>(f<span class="str">"Internal retrieval score: {score:.2f}"</span>)
+
+    <span class="kw">if</span> score >= <span class="nb">0.7</span>:
+        <span class="cm"># Internal context is sufficient — no web call needed</span>
+        <span class="kw">return</span> internal_docs, <span class="str">"internal"</span>
+
+    <span class="cm"># Step 3: Score too low — rewrite and search web</span>
+    rewrite_prompt = f<span class="str">"Rewrite for web search: '{query}'. Return only the improved query."</span>
+    web_query = llm.invoke(rewrite_prompt).content.strip()
+    web_docs = web_retriever.invoke(web_query)
+
+    <span class="cm"># Optional: augment internal with web, or replace entirely</span>
+    <span class="kw">if</span> score >= <span class="nb">0.3</span>:  <span class="cm"># partial match: augment</span>
+        <span class="kw">return</span> internal_docs[:2] + web_docs[:3], <span class="str">"augmented"</span>
+    <span class="kw">else</span>:              <span class="cm"># very low: replace with web</span>
+        <span class="kw">return</span> web_docs, <span class="str">"web"</span></code></pre>
+
+  <div class="callout crag">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Why CRAG beats always-web:</strong> A well-tuned internal knowledge base answers 70–80% of queries without a web call. CRAG reduces web API costs by that proportion while still providing live data for the queries that genuinely need it. IBM's production CRAG implementation with Tavily showed that source verification — checking whether web results were actually relevant to the internal domain — eliminated a significant category of off-topic web context from entering the LLM.</div>
+  </div>
+
+  <hr class="div">
+
+  <!-- SECTION 4: ADAPTIVE ROUTING -->
+  <h2>Adaptive RAG — <em>Route by Query Type</em></h2>
+
+  <p>CRAG reacts to retrieval quality after the fact. Adaptive RAG is proactive: it classifies the query before retrieval and routes to the right source from the start. This eliminates unnecessary retrieval attempts on queries that clearly need live data, and unnecessary web API calls on queries that clearly do not.</p>
+
+<pre><code><span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
+<span class="kw">import</span> json, re
+<span class="kw">from</span> datetime <span class="kw">import</span> datetime
+
+client = Anthropic()
+
+FRESHNESS_KEYWORDS = [
+    <span class="str">"current"</span>, <span class="str">"latest"</span>, <span class="str">"today"</span>, <span class="str">"now"</span>, <span class="str">"recent"</span>, <span class="str">"2026"</span>,
+    <span class="str">"this week"</span>, <span class="str">"yesterday"</span>, <span class="str">"just announced"</span>, <span class="str">"breaking"</span>,
+    <span class="str">"price"</span>, <span class="str">"stock"</span>, <span class="str">"news"</span>, <span class="str">"update"</span>, <span class="str">"new release"</span>
+]
+
+<span class="kw">def</span> <span class="fn">classify_query</span>(query: str) -> str:
+    <span class="cm">"""
+    Classify query into routing category:
+    - "static":     internal KB sufficient (policies, manuals, historical facts)
+    - "live":       requires current web data (prices, news, recent events)
+    - "uncertain":  unclear — use CRAG (internal first, web fallback)
+    """</span>
+    query_lower = query.lower()
+
+    <span class="cm"># Fast rule-based pre-check (no LLM cost)</span>
+    <span class="kw">if</span> <span class="fn">any</span>(kw <span class="kw">in</span> query_lower <span class="kw">for</span> kw <span class="kw">in</span> FRESHNESS_KEYWORDS):
+        <span class="kw">return</span> <span class="str">"live"</span>
+
+    <span class="cm"># LLM classifier for ambiguous cases</span>
+    response = client.messages.create(
+        model=<span class="str">"claude-sonnet-4-6"</span>, max_tokens=<span class="nb">100</span>,
+        messages=[{
+            <span class="str">"role"</span>: <span class="str">"user"</span>,
+            <span class="str">"content"</span>: f<span class="str">"""Classify this RAG query. Return JSON only:
+{{"route": "static|live|uncertain", "reason": "one sentence"}}
+
+"static" = can be answered from internal documents (policies, facts, docs)
+"live" = requires current web data (prices, news, events after {datetime.now().year - 1})
+"uncertain" = unclear, try internal first
+
+Query: {query}"""</span>
+        }]
+    )
+
+    <span class="kw">try</span>:
+        result = json.loads(response.content[<span class="nb">0</span>].text)
+        <span class="kw">return</span> result[<span class="str">"route"</span>]
+    <span class="kw">except</span>:
+        <span class="kw">return</span> <span class="str">"uncertain"</span>
+
+<span class="kw">def</span> <span class="fn">adaptive_retrieve</span>(query: str, vectorstore, web_retriever) -> list:
+    route = <span class="fn">classify_query</span>(query)
+    <span class="fn">print</span>(f<span class="str">"Route decision: {route}"</span>)
+
+    <span class="kw">if</span> route == <span class="str">"static"</span>:
+        <span class="kw">return</span> vectorstore.similarity_search(query, k=<span class="nb">5</span>)
+
+    <span class="kw">elif</span> route == <span class="str">"live"</span>:
+        <span class="kw">return</span> web_retriever.invoke(query)
+
+    <span class="kw">else</span>:  <span class="cm"># uncertain → CRAG</span>
+        <span class="kw">return</span> <span class="fn">crag_retrieve</span>(query, vectorstore)[<span class="nb">0</span>]
+
+<span class="cm"># Examples:
+# "What is our refund policy?" → static (internal KB)
+# "What is GPT-5's context window?" → live (web search)
+# "How does our pricing compare to competitors?" → uncertain (CRAG)</span></code></pre>
+
+  <hr class="div">
+
+  <!-- SECTION 5: FRESHNESS TIERS -->
+  <h2>Tiered Freshness Strategy — <em>Managing Cost and Latency</em></h2>
+
+  <p>Hitting a web search API on every live query is expensive at scale. The solution is a tiered caching strategy based on how quickly information in each category becomes stale.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Content Type</th>
+          <th>Staleness Rate</th>
+          <th>Cache Duration</th>
+          <th>Retrieval Strategy</th>
+          <th>Example Queries</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Real-time</strong></td>
+          <td class="bad">Changes hourly</td>
+          <td class="bad">No cache</td>
+          <td>Always live web</td>
+          <td>Stock prices, live sports scores, breaking news</td>
+        </tr>
+        <tr>
+          <td><strong>Daily-fresh</strong></td>
+          <td>Changes daily</td>
+          <td class="mid">Cache 4–24h</td>
+          <td>Web + TTL cache</td>
+          <td>Today's news, regulatory announcements</td>
+        </tr>
+        <tr>
+          <td><strong>Semi-stable</strong></td>
+          <td>Changes weekly</td>
+          <td class="good">Cache 24–72h</td>
+          <td>Cached web results</td>
+          <td>Product specs, API docs, company profiles</td>
+        </tr>
+        <tr>
+          <td><strong>Stable</strong></td>
+          <td>Changes monthly+</td>
+          <td class="good">Internal KB</td>
+          <td>Static RAG only</td>
+          <td>Legal contracts, manuals, historical facts</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+<pre><code><span class="kw">import</span> redis
+<span class="kw">import</span> hashlib
+<span class="kw">from</span> tavily <span class="kw">import</span> TavilyClient
+
+r = redis.Redis(host=<span class="str">"localhost"</span>, port=<span class="nb">6379</span>)
+tavily = TavilyClient(api_key=<span class="str">"..."</span>)
+
+<span class="kw">def</span> <span class="fn">cached_web_search</span>(query: str, ttl_hours: int = <span class="nb">24</span>) -> list:
+    <span class="cm">"""Web search with Redis caching. TTL varies by content type."""</span>
+    cache_key = f<span class="str">"rag:web:{hashlib.md5(query.encode()).hexdigest()}"</span>
+
+    <span class="cm"># Check cache first</span>
+    cached = r.get(cache_key)
+    <span class="kw">if</span> cached:
+        <span class="fn">print</span>(<span class="str">"Cache hit — no web API call"</span>)
+        <span class="kw">import</span> json
+        <span class="kw">return</span> json.loads(cached)
+
+    <span class="cm"># Cache miss — hit live web</span>
+    results = tavily.search(query=query, max_results=<span class="nb">5</span>)[<span class="str">"results"</span>]
+
+    <span class="cm"># Cache with appropriate TTL</span>
+    r.setex(cache_key, ttl_hours * <span class="nb">3600</span>, json.dumps(results))
+    <span class="fn">print</span>(f<span class="str">"Web search complete, cached for {ttl_hours}h"</span>)
+    <span class="kw">return</span> results
+
+<span class="cm"># Usage:
+# Real-time: cached_web_search(query, ttl_hours=0)  # no cache
+# Daily news: cached_web_search(query, ttl_hours=4)
+# Semi-stable: cached_web_search(query, ttl_hours=48)
+# This cuts web API calls by 60-70% for typical enterprise workloads</span></code></pre>
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw a decision flow diagram for internet-connected RAG routing. Show a 'User Query' box at the top. From it, draw an arrow to a 'Query Classifier' diamond. Three branches come out: LEFT branch labeled 'Static (policies, contracts, manuals)' → 'Internal Vector DB' → 'LLM Generate'. RIGHT branch labeled 'Live (prices, news, recent events)' → 'Web Search API (Tavily/Exa)' → 'LLM Generate'. MIDDLE branch labeled 'Uncertain' → 'Internal Retrieve' → 'Grade Quality' diamond → if HIGH score (≥0.7) → 'LLM from internal'; if LOW score (<0.7) → 'Rewrite Query' → 'Web Search API' → 'LLM from web'. Show a 'Redis Cache' box between 'Web Search API' and 'LLM Generate' with a dotted TTL label. Use blue for static/internal paths, cyan for web paths, violet for CRAG/uncertain path. Add a small legend. Dark background."
+  </div>
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-text">The most common mistake I see teams make when adding internet connectivity to RAG is treating it as an all-or-nothing decision. They either use static RAG for everything (and wonder why it fails on time-sensitive queries) or route every query through a web search API (and then complain about latency and cost). The correct architecture is surgical: classify your queries by freshness requirement, use internal retrieval for the 70–80% that do not need live data, and reserve web search for the minority that genuinely do. CRAG is the safety net for the uncertain middle. That tiered approach is what separates a production-grade internet-aware RAG from an expensive demo.</div>
+    <div class="opinion-attr">— Personal take · Based on production internet-RAG architectures observed in enterprise deployments</div>
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>Three Things to Take Away</h2>
+    <p><strong>First: static RAG has a knowledge decay problem that matters at different rates for different query types.</strong> Stock prices decay in minutes. News decays in hours. Product specs decay in days. Company policies decay in months. Your routing architecture should reflect this — do not treat all queries the same.</p>
+    <p><strong>Second: CRAG is the architecture for most production systems.</strong> It provides the cost and speed advantages of internal retrieval for the majority of queries, while automatically falling back to live web data when internal retrieval quality is insufficient. The LLM-as-judge grader is the key component — it makes the fallback decision data-driven rather than rule-based.</p>
+    <p><strong>Third: semantic caching is the cost control lever.</strong> Caching web search results with appropriate TTLs by content type can cut web API costs by 60–70% for typical enterprise workloads. Real-time data skips the cache. Semi-stable product information caches for 48 hours. Stable reference documents never hit the web at all. The tiered strategy is what makes live web retrieval economically viable at scale.</p>
+    <p style="margin-top:18px;color:var(--muted);font-size:15px">The combination of adaptive query routing, CRAG fallback logic, and tiered caching is what "connecting RAG to the internet" actually means in a production system. Each piece is individually simple — together they form a retrieval architecture that is both accurate and economically sustainable.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="cta-label">Your next step</div>
+    <div class="cta-text">Add a Tavily or Serper web search retriever to your existing RAG system this week. Do not replace your internal retrieval — add it as a CRAG fallback triggered when your relevance grader scores below 0.7. Measure the proportion of queries that trigger the web fallback. If it is above 30%, your internal knowledge base needs more comprehensive coverage. If it is below 5%, your queries are mostly stable content and you may not need live web retrieval at all.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <p><strong>Discussion —</strong> What proportion of your RAG queries genuinely require live internet data versus stable internal knowledge? And when you first added web retrieval, what was the latency and cost impact on your system — was it worth it?</p>
+  </div>
+
+  <!-- RELATED -->
+  <span class="related-label">Related posts to write next</span>
+  <div class="related-grid">
+    <div class="related-card">
+      <div class="rc-tag">Tutorial</div>
+      <div class="rc-title">Building a LangGraph CRAG Agent — Stateful Corrective RAG with Web Fallback in Production</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Deep-Dive</div>
+      <div class="rc-title">Tavily vs Exa vs Firecrawl — Choosing a Web Search API for Your RAG Architecture in 2026</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Production Guide</div>
+      <div class="rc-title">Semantic Caching for RAG — Redis + Vector Similarity to Cut API Costs by 70%</div>
+    </div>
+  </div>
+
+  <!-- SEO -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row"><strong>Primary keyword:</strong> connecting RAG with internet</div>
+    <div class="seo-row"><strong>URL slug:</strong> <code>/blog/connecting-rag-with-internet-web-search</code></div>
+    <div class="seo-row" style="margin-top:10px"><strong>Secondary keywords:</strong></div>
+    <div class="tag-list" style="margin-bottom:12px">
+      <span class="seo-tag">web-connected RAG</span>
+      <span class="seo-tag">corrective RAG CRAG</span>
+      <span class="seo-tag">Tavily RAG integration</span>
+      <span class="seo-tag">live data RAG production</span>
+      <span class="seo-tag">adaptive RAG routing</span>
+    </div>
+    <div class="seo-row"><strong>Tags:</strong></div>
+    <div class="tag-list">
+      <span class="seo-tag">rag</span>
+      <span class="seo-tag">web-search</span>
+      <span class="seo-tag">tavily</span>
+      <span class="seo-tag">crag</span>
+      <span class="seo-tag">adaptive-rag</span>
+      <span class="seo-tag">langchain</span>
+      <span class="seo-tag">production-ai</span>
+      <span class="seo-tag">ai-engineering</span>
+    </div>
+    <div style="font-family:'Source Code Pro',monospace;font-size:11px;color:var(--dim);margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      Sources: LangWatch — Ultimate RAG Blueprint 2025/2026 · AlphaCorp — Perplexity vs Tavily for RAG 2026 · Firecrawl — Best Web Search APIs for AI Applications 2026 · IBM Think — Build a Corrective RAG Agent with Granite and Tavily · Meilisearch — Corrective RAG (CRAG) Explained · SearchCans — Building RAG Knowledge Base from Web Scraping (Jan 2026) · ScrapingBee — 9 Best Web Search APIs for AI Agents 2026
+    </div>
+  </div>
+
+</main>
+</body>
+</html>

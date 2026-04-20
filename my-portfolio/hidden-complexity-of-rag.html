@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Hidden Complexity of RAG — From Beginner Surface to Builder Depth</title>
+<meta name="description" content="The RAG iceberg: above the waterline is a basic pipeline. Below it are reranking, query reformulation, hallucination detection, PII masking, latency vs accuracy tradeoffs, and much more. Here's the full map.">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f8f9ff;
+  --bg2: #eef0fb;
+  --surface: #ffffff;
+  --border: #dde1f5;
+  --border2: #c9cff0;
+  --ink: #111827;
+  --ink2: #1e2a4a;
+  --muted: #5a6480;
+  --dim: #8893b0;
+
+  /* Above waterline = sky / light */
+  --sky: #e8f0fe;
+  --sky-border: #93aef0;
+  --sky-text: #1d4ed8;
+
+  /* Below waterline = deep ocean */
+  --deep: #0f172a;
+  --deep2: #1e2a4a;
+  --deep3: #162040;
+  --wave: #1d4088;
+  --ocean: #2d6ee6;
+  --ocean-light: #60a5fa;
+  --ocean-soft: rgba(45,110,230,0.1);
+  --ocean-border: rgba(45,110,230,0.3);
+
+  /* Accent */
+  --gold: #f59e0b;
+  --gold-soft: rgba(245,158,11,0.1);
+  --red: #ef4444;
+  --green: #10b981;
+
+  --code-bg: #0f172a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Manrope', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16.5px;
+  line-height: 1.82;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOP NAV ── */
+.topnav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-brand {
+  font-size: 13px; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.03em;
+}
+.nav-issue {
+  font-family: 'Courier Prime', monospace;
+  font-size: 11px; color: var(--dim); letter-spacing: 0.05em;
+}
+
+/* ── HERO — ICEBERG STYLE ── */
+.hero {
+  background: linear-gradient(180deg, #dbeafe 0%, #eff6ff 40%, #bfdbfe 60%, #1e40af 75%, #0f172a 100%);
+  min-height: 380px; padding: 64px 40px 0;
+  text-align: center; position: relative; overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, var(--deep));
+}
+.hero-inner { max-width: 720px; margin: 0 auto; position: relative; z-index: 2; }
+.hero-tag {
+  display: inline-block;
+  font-family: 'Courier Prime', monospace;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--sky-text); background: var(--sky); border: 1px solid var(--sky-border);
+  padding: 4px 14px; border-radius: 999px; margin-bottom: 20px;
+}
+h1 {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: clamp(38px, 6vw, 62px); font-weight: 600;
+  line-height: 1.1; letter-spacing: -0.02em;
+  color: var(--ink2); margin-bottom: 20px;
+}
+h1 em { font-style: italic; color: var(--sky-text); }
+.hero-sub {
+  font-size: 18px; font-weight: 300; color: var(--muted);
+  max-width: 580px; margin: 0 auto 32px; line-height: 1.7;
+}
+.hero-meta {
+  font-size: 13px; color: var(--muted);
+  display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+  margin-bottom: 48px;
+}
+
+/* ── ABOVE / BELOW LABELS ── */
+.above-line {
+  background: var(--sky); border: 1px solid var(--sky-border);
+  border-radius: 6px; padding: 18px 24px; margin: 0 0 4px;
+  display: flex; align-items: center; gap: 12px;
+}
+.below-line {
+  background: var(--deep2); border: 1px solid var(--ocean-border);
+  border-radius: 6px; padding: 18px 24px; margin: 4px 0 0;
+  display: flex; align-items: center; gap: 12px;
+}
+.zone-label {
+  font-family: 'Courier Prime', monospace;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 3px 10px; border-radius: 3px;
+  flex-shrink: 0;
+}
+.zl-above { color: var(--sky-text); background: rgba(29,78,216,0.1); border: 1px solid var(--sky-border); }
+.zl-below { color: var(--ocean-light); background: rgba(96,165,250,0.1); border: 1px solid var(--ocean-border); }
+.zone-text { font-size: 14px; color: var(--muted); }
+.zone-text.dark { color: rgba(255,255,255,0.55); }
+
+/* ── WATERLINE ── */
+.waterline {
+  background: var(--deep);
+  padding: 0;
+  position: relative;
+}
+.waterline-bar {
+  height: 3px;
+  background: linear-gradient(90deg, var(--ocean), var(--ocean-light), var(--ocean));
+}
+.waterline-label {
+  text-align: center; padding: 10px;
+  font-family: 'Courier Prime', monospace;
+  font-size: 11px; color: var(--ocean-light); letter-spacing: 0.1em;
+  text-transform: uppercase; opacity: 0.7;
+}
+
+/* ── MAIN LAYOUT ── */
+.above-section {
+  background: var(--bg);
+  padding: 0;
+}
+.below-section {
+  background: var(--deep);
+  color: rgba(255,255,255,0.85);
+  padding: 0;
+}
+
+.container { max-width: 860px; margin: 0 auto; padding: 0 40px; }
+.section-pad { padding-top: 64px; padding-bottom: 24px; }
+
+/* ── TYPOGRAPHY ── */
+h2 {
+  font-family: 'Crimson Pro', serif;
+  font-size: 34px; font-weight: 600;
+  line-height: 1.2; letter-spacing: -0.015em;
+  margin-bottom: 18px;
+}
+h2.light { color: #fff; }
+h2.dark { color: var(--ink); }
+h2 em { font-style: italic; }
+h3 {
+  font-family: 'Manrope', sans-serif;
+  font-size: 17px; font-weight: 700;
+  margin: 36px 0 12px;
+}
+h3.light { color: var(--ocean-light); }
+h3.dark { color: var(--ink2); }
+p { margin-bottom: 20px; }
+p.dark { color: var(--ink2); }
+p.light { color: rgba(255,255,255,0.7); }
+p strong { font-weight: 700; }
+p.dark strong { color: var(--ink); }
+p.light strong { color: #fff; }
+hr.div-dark { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 48px 0; }
+hr.div-light { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+
+/* ── BEGINNER CARDS (above) ── */
+.beginner-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; margin: 28px 0;
+}
+.bcard {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 18px 16px;
+  border-top: 3px solid var(--sky-text);
+}
+.bcard-num {
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px; color: var(--sky-text); letter-spacing: 0.1em;
+  margin-bottom: 6px; font-weight: 700;
+}
+.bcard-name { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.bcard-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+/* ── TL;DR ── */
+.tldr {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-left: 4px solid var(--ocean); border-radius: 0 8px 8px 0;
+  padding: 24px 26px; margin: 40px 0;
+}
+.tldr-head {
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ocean); margin-bottom: 14px;
+}
+.tldr ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.tldr li {
+  font-size: 14.5px; color: var(--muted);
+  padding-left: 20px; position: relative; line-height: 1.6;
+}
+.tldr li::before { content: '›'; position: absolute; left: 0; color: var(--ocean); font-weight: 800; font-size: 16px; line-height: 1.4; }
+
+/* ── DEPTH CARDS (below water) ── */
+.depth-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px; margin: 28px 0;
+}
+.dcard {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; padding: 20px 18px;
+  border-left: 3px solid;
+}
+.dcard.tier1 { border-left-color: var(--ocean-light); }
+.dcard.tier2 { border-left-color: var(--gold); }
+.dcard.tier3 { border-left-color: var(--red); }
+.dcard-badge {
+  font-family: 'Courier Prime', monospace;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  margin-bottom: 8px; display: inline-block; padding: 2px 8px; border-radius: 3px;
+}
+.dcard.tier1 .dcard-badge { color: var(--ocean-light); background: rgba(96,165,250,0.1); }
+.dcard.tier2 .dcard-badge { color: var(--gold); background: rgba(245,158,11,0.1); }
+.dcard.tier3 .dcard-badge { color: #fca5a5; background: rgba(239,68,68,0.1); }
+.dcard-name { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.dcard-desc { font-size: 13px; color: rgba(255,255,255,0.55); line-height: 1.6; }
+
+/* ── CALLOUT ── */
+.callout {
+  border-radius: 6px; padding: 16px 20px; margin: 28px 0;
+  display: flex; gap: 14px; border: 1px solid;
+}
+.callout.light-info { background: var(--bg2); border-color: var(--sky-border); }
+.callout.dark-warn { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.3); }
+.callout.dark-info { background: var(--ocean-soft); border-color: var(--ocean-border); }
+.callout.dark-red { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
+.callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+.callout-body { font-size: 14.5px; line-height: 1.65; }
+.callout.light-info .callout-body { color: var(--ink2); }
+.callout.dark-warn .callout-body { color: rgba(255,255,255,0.75); }
+.callout.dark-info .callout-body { color: rgba(255,255,255,0.75); }
+.callout.dark-red .callout-body { color: rgba(255,255,255,0.75); }
+.callout-body strong { font-weight: 700; }
+.callout.light-info .callout-body strong { color: var(--ink); }
+.callout.dark-warn .callout-body strong { color: #fff; }
+.callout.dark-info .callout-body strong { color: #fff; }
+.callout.dark-red .callout-body strong { color: #fff; }
+
+/* ── CODE ── */
+pre {
+  background: var(--code-bg);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px; padding: 20px 22px;
+  overflow-x: auto; margin: 22px 0;
+  font-family: 'Courier Prime', monospace;
+  font-size: 13px; line-height: 1.78; color: #cbd5e1;
+}
+code {
+  font-family: 'Courier Prime', monospace; font-size: 13px;
+  color: var(--ocean); background: var(--ocean-soft);
+  border: 1px solid var(--ocean-border); padding: 1px 5px; border-radius: 3px;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; }
+.kw { color: #c084fc; }
+.fn { color: #86efac; }
+.str { color: #fde68a; }
+.cm { color: #475569; font-style: italic; }
+.nb { color: #fdba74; }
+
+/* ── METRIC TABLE ── */
+.table-wrap { overflow-x: auto; margin: 24px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th {
+  text-align: left; padding: 10px 14px;
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  color: var(--ocean-light); background: rgba(255,255,255,0.03);
+  white-space: nowrap;
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.65); vertical-align: top; line-height: 1.5;
+}
+td strong { color: rgba(255,255,255,0.9); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+td.good { color: var(--green); font-weight: 600; }
+td.warn { color: var(--gold); font-weight: 600; }
+td.bad { color: #fca5a5; }
+td.target { color: var(--ocean-light); font-weight: 600; }
+
+/* ── ICEBERG MINI VISUAL ── */
+.iceberg-mini {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 28px 24px; margin: 32px 0;
+  overflow-x: auto;
+}
+
+/* ── PIPELINE VISUAL (above water section) ── */
+.pipeline-visual {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 24px 20px; margin: 28px 0;
+  overflow-x: auto;
+}
+
+/* ── OPINION ── */
+.opinion {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-left: 4px solid var(--ocean-light);
+  border-radius: 0 8px 8px 0;
+  padding: 28px 26px; margin: 48px 0;
+}
+.opinion-text {
+  font-family: 'Crimson Pro', serif;
+  font-size: 20px; font-style: italic; color: rgba(255,255,255,0.9);
+  line-height: 1.6; margin-bottom: 12px;
+}
+.opinion-attr { font-size: 12px; color: rgba(255,255,255,0.35); letter-spacing: 0.04em; }
+
+/* ── CONCLUSION / CTA ── */
+.conclusion {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-top: 4px solid var(--ocean);
+  border-radius: 0 0 8px 8px; padding: 36px 32px; margin: 56px 0 40px;
+}
+.conclusion h2 { margin-top: 0; color: var(--ink); }
+
+.cta-block {
+  background: var(--deep); color: #fff;
+  border-radius: 8px; padding: 28px 28px; margin: 32px 0;
+}
+.cta-label {
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ocean-light); margin-bottom: 8px;
+}
+.cta-text { font-size: 15.5px; line-height: 1.65; color: rgba(255,255,255,0.72); }
+
+.discussion {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 22px 22px; margin: 28px 0;
+}
+.discussion p { margin: 0; font-size: 15px; color: var(--muted); }
+.discussion p strong { color: var(--ink); }
+
+/* ── RELATED ── */
+.related-label {
+  font-family: 'Courier Prime', monospace;
+  font-size: 10px; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px; margin-top: 48px; display: block;
+}
+.related-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;
+}
+.related-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; transition: border-color 0.2s;
+}
+.related-card:hover { border-color: var(--ocean); }
+.rc-tag {
+  font-family: 'Courier Prime', monospace; font-size: 10px; color: var(--green);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 7px;
+}
+.rc-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+
+/* ── SEO ── */
+.seo-block { border-top: 1px solid var(--border); margin-top: 64px; padding-top: 28px; }
+.seo-block h3 {
+  font-family: 'Courier Prime', monospace; font-size: 10px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
+  font-weight: 700; border: none; margin-top: 0; color: var(--dim);
+}
+.tag-list { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.seo-tag {
+  font-family: 'Courier Prime', monospace; font-size: 11px; color: var(--ocean);
+  background: var(--ocean-soft); border: 1px solid var(--ocean-border);
+  padding: 3px 10px; border-radius: 3px;
+}
+.seo-row { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+
+/* ── EXCALI ── */
+.excali {
+  background: var(--bg2); border: 1px dashed var(--border2);
+  border-radius: 6px; padding: 20px 20px; margin: 28px 0;
+  font-size: 14px; color: var(--muted); line-height: 1.7;
+}
+.excali strong {
+  font-family: 'Courier Prime', monospace; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--ocean);
+  display: block; margin-bottom: 8px;
+}
+
+@media (max-width: 660px) {
+  .topnav { padding: 12px 20px; }
+  .hero { padding: 48px 20px 0; }
+  .container { padding: 0 20px; }
+  h1 { font-size: 34px; }
+  h2 { font-size: 26px; }
+  .beginner-grid { grid-template-columns: 1fr; }
+  .depth-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPNAV -->
+<div class="topnav">
+  <div class="nav-brand">Agentic AI Engineering · RAG Deep-Dive Series</div>
+  <div class="nav-issue">Issue #17 · April 2026</div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag">Explainer · Production RAG · All Levels</div>
+    <h1>The <em>Hidden Complexity</em> of RAG</h1>
+    <div class="hero-sub">Most tutorials show you the tip of the iceberg. Here's what's below the waterline — and why it's where 90% of production failures hide.</div>
+    <div class="hero-meta">
+      <span>Krishil Agrawal</span>
+      <span>·</span>
+      <span>18 min read · ~3,600 words</span>
+      <span>·</span>
+      <span>Beginner to Advanced</span>
+    </div>
+  </div>
+</section>
+
+<!-- ZONE LABELS -->
+<div class="container" style="padding-top:32px">
+  <div class="above-line">
+    <span class="zone-label zl-above">Above water</span>
+    <span class="zone-text">RAG for Beginners — the 7 concepts every tutorial covers. Fast to understand, fast to break in production.</span>
+  </div>
+  <div style="height:4px;background:linear-gradient(90deg,#1d4ed8,#60a5fa,#1d4ed8);"></div>
+  <div class="below-line">
+    <span class="zone-label zl-below">Below water</span>
+    <span class="zone-text dark">RAG for Builders — the 15+ concepts tutorials skip. This is where production systems live or die.</span>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="above-section">
+<div class="container section-pad">
+
+  <p class="dark" style="margin-top:32px">There is a version of RAG that takes two hours to build. Embed your documents. Store them in Chroma. Embed the query. Retrieve top-5 chunks. Pass to the LLM. Ship it. You will get a demo that impresses everyone in the room. You will get a prototype that "works."</p>
+
+  <p class="dark">Then you put it in production. Users ask slightly different questions than you expected. The retrieval returns irrelevant chunks. The LLM hallucinates because it got noisy context. Sensitive customer data leaks into wrong responses. Latency spikes because you are embedding every query cold. Nobody told you any of this was coming, because every tutorial stopped at the demo.</p>
+
+  <p class="dark">This post is the complete iceberg map — above the waterline and below it. You will understand not just what these concepts are, but why they exist and what failure they prevent.</p>
+
+  <!-- TL;DR -->
+  <div class="tldr">
+    <div class="tldr-head">TL;DR — the 4 things to know first</div>
+    <ul>
+      <li>The beginner RAG stack (LangChain, embeddings, vector DB, prompt templates) is real and necessary. It is not wrong — it is just incomplete for production.</li>
+      <li>Poorly evaluated RAG systems hallucinate in up to 40% of responses even when the correct source document was retrieved. The problem is not always retrieval — it is generation quality on noisy context.</li>
+      <li>70% of RAG systems in production still lack systematic evaluation frameworks, making it impossible to detect quality regressions. Evaluation is not optional infrastructure.</li>
+      <li>The builder's layer — reranking, query reformulation, PII masking, hallucination detection, latency/accuracy tradeoffs, retrieval caching — adds significant engineering effort but prevents the silent failures that break production systems.</li>
+    </ul>
+  </div>
+
+</div>
+</div>
+
+<!-- ======== ABOVE WATER ======== -->
+<div class="above-section">
+<div class="container">
+
+  <h2 class="dark" style="margin-top:0;padding-top:20px">Above the Waterline:<br><em>RAG for Beginners</em></h2>
+  <p class="dark">These are the 7 concepts every RAG tutorial covers. They are the foundation. Without them, nothing else works. The mistake is not learning them — the mistake is thinking they are enough.</p>
+
+  <div class="beginner-grid">
+    <div class="bcard">
+      <div class="bcard-num">01 · Framework</div>
+      <div class="bcard-name">LangChain / LlamaIndex Basics</div>
+      <div class="bcard-desc">The orchestration layer that stitches retrieval to generation. LangChain gives you composable chains; LlamaIndex specializes in document indexing and querying. Both abstract the boilerplate so you focus on logic.</div>
+    </div>
+    <div class="bcard">
+      <div class="bcard-num">02 · Architecture</div>
+      <div class="bcard-name">Basic Retrieval Pipeline</div>
+      <div class="bcard-desc">The core loop: ingest → chunk → embed → index → retrieve → generate. Understanding this sequence is the prerequisite for understanding every optimization that comes later.</div>
+    </div>
+    <div class="bcard">
+      <div class="bcard-num">03 · Ingestion</div>
+      <div class="bcard-name">Data Loaders (PDFs, CSVs, Docs)</div>
+      <div class="bcard-desc">Before you can retrieve, you need clean text. PDF extraction fails on scanned images, tables, and multi-column layouts. Data loading is where hidden quality problems begin — long before the LLM is involved.</div>
+    </div>
+    <div class="bcard">
+      <div class="bcard-num">04 · Representation</div>
+      <div class="bcard-name">Chunking and Embeddings</div>
+      <div class="bcard-desc">Text is split into chunks (fixed-size, semantic, or structural), then each chunk is converted to a dense vector by an embedding model. Chunk size directly determines retrieval quality — too small loses context, too large drowns the LLM.</div>
+    </div>
+    <div class="bcard">
+      <div class="bcard-num">05 · Storage</div>
+      <div class="bcard-name">Vector Databases</div>
+      <div class="bcard-desc">Pinecone, FAISS, Chroma, Qdrant, Weaviate — stores that support approximate nearest neighbor (ANN) search over high-dimensional vectors. ANN trades 100% recall for millisecond query times across millions of vectors.</div>
+    </div>
+    <div class="bcard">
+      <div class="bcard-num">06 · Interface</div>
+      <div class="bcard-name">Prompt Templates</div>
+      <div class="bcard-desc">The structural format that places retrieved context and the user question into the LLM's input. A poorly designed prompt template causes the LLM to ignore retrieved context and answer from training knowledge — defeating the entire purpose of RAG.</div>
+    </div>
+    <div class="bcard">
+      <div class="bcard-num">07 · Generation</div>
+      <div class="bcard-name">LLMs + Retrieval</div>
+      <div class="bcard-desc">The generative model that reads the context and produces an answer. The model choice matters less than you think — a well-designed retrieval pipeline with an average model outperforms a top model with poor retrieval.</div>
+    </div>
+  </div>
+
+  <!-- BASIC PIPELINE VISUAL -->
+  <div class="pipeline-visual">
+    <div style="font-family:'Courier Prime',monospace;font-size:10px;color:var(--dim);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:16px">Basic RAG pipeline — the beginner's version</div>
+    <svg width="100%" viewBox="0 0 680 72" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <rect x="0" y="14" width="88" height="44" rx="4" fill="rgba(29,78,216,0.07)" stroke="rgba(29,78,216,0.35)" stroke-width="1"/>
+      <text font-family="'Manrope',sans-serif" font-size="11" fill="#1d4ed8" x="44" y="35" text-anchor="middle" font-weight="700">Docs In</text>
+      <text font-family="'Manrope',sans-serif" font-size="10" fill="#8893b0" x="44" y="50" text-anchor="middle">raw text</text>
+      <line x1="90" y1="36" x2="106" y2="36" stroke="#93aef0" stroke-width="1" marker-end="url(#arr5)"/>
+      <rect x="108" y="14" width="88" height="44" rx="4" fill="rgba(29,78,216,0.07)" stroke="rgba(29,78,216,0.35)" stroke-width="1"/>
+      <text font-family="'Manrope',sans-serif" font-size="11" fill="#1d4ed8" x="152" y="35" text-anchor="middle" font-weight="700">Chunk</text>
+      <text font-family="'Manrope',sans-serif" font-size="10" fill="#8893b0" x="152" y="50" text-anchor="middle">512 tokens</text>
+      <line x1="198" y1="36" x2="214" y2="36" stroke="#93aef0" stroke-width="1" marker-end="url(#arr5)"/>
+      <rect x="216" y="14" width="88" height="44" rx="4" fill="rgba(29,78,216,0.07)" stroke="rgba(29,78,216,0.35)" stroke-width="1"/>
+      <text font-family="'Manrope',sans-serif" font-size="11" fill="#1d4ed8" x="260" y="35" text-anchor="middle" font-weight="700">Embed</text>
+      <text font-family="'Manrope',sans-serif" font-size="10" fill="#8893b0" x="260" y="50" text-anchor="middle">dense vector</text>
+      <line x1="306" y1="36" x2="322" y2="36" stroke="#93aef0" stroke-width="1" marker-end="url(#arr5)"/>
+      <rect x="324" y="14" width="88" height="44" rx="4" fill="rgba(29,78,216,0.07)" stroke="rgba(29,78,216,0.35)" stroke-width="1"/>
+      <text font-family="'Manrope',sans-serif" font-size="11" fill="#1d4ed8" x="368" y="35" text-anchor="middle" font-weight="700">Store</text>
+      <text font-family="'Manrope',sans-serif" font-size="10" fill="#8893b0" x="368" y="50" text-anchor="middle">vector DB</text>
+      <line x1="414" y1="36" x2="430" y2="36" stroke="#93aef0" stroke-width="1" marker-end="url(#arr5)"/>
+      <rect x="432" y="14" width="88" height="44" rx="4" fill="rgba(29,78,216,0.07)" stroke="rgba(29,78,216,0.35)" stroke-width="1"/>
+      <text font-family="'Manrope',sans-serif" font-size="11" fill="#1d4ed8" x="476" y="35" text-anchor="middle" font-weight="700">Retrieve</text>
+      <text font-family="'Manrope',sans-serif" font-size="10" fill="#8893b0" x="476" y="50" text-anchor="middle">top-k ANN</text>
+      <line x1="522" y1="36" x2="538" y2="36" stroke="#93aef0" stroke-width="1" marker-end="url(#arr5)"/>
+      <rect x="540" y="14" width="130" height="44" rx="4" fill="rgba(29,78,216,0.12)" stroke="rgba(29,78,216,0.5)" stroke-width="1.2"/>
+      <text font-family="'Manrope',sans-serif" font-size="11" fill="#1d4ed8" x="605" y="35" text-anchor="middle" font-weight="700">Generate</text>
+      <text font-family="'Manrope',sans-serif" font-size="10" fill="#8893b0" x="605" y="50" text-anchor="middle">LLM + context</text>
+    </svg>
+  </div>
+
+  <div class="callout light-info">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>The demo problem:</strong> This pipeline works well on the documents you indexed and the queries you tested. It breaks on edge cases, domain-specific vocabulary, PII-containing documents, ambiguous queries, and any user behavior you did not anticipate. The above is not wrong — it is just incomplete without everything below the waterline.</div>
+  </div>
+
+</div>
+</div>
+
+<!-- WATERLINE -->
+<div class="waterline">
+  <div class="waterline-bar"></div>
+  <div class="waterline-label">— waterline — below here: RAG for Builders —</div>
+  <div class="waterline-bar"></div>
+</div>
+
+<!-- ======== BELOW WATER ======== -->
+<div class="below-section">
+<div class="container section-pad">
+
+  <h2 class="light">Below the Waterline:<br><em>RAG for Builders</em></h2>
+  <p class="light">This is where production systems diverge from demos. Each concept below exists because something broke — in someone's production system — before they added it. These are not optional improvements. They are the lessons of shipping RAG at scale.</p>
+
+  <!-- ── TIER 1: PRE-RETRIEVAL ── -->
+  <h3 class="light" style="color:var(--ocean-light);margin-top:32px">Tier 1 — Pre-Retrieval: Before You Even Search</h3>
+
+  <div class="depth-grid">
+    <div class="dcard tier1">
+      <div class="dcard-badge">Pre-processing</div>
+      <div class="dcard-name">Preprocessing & Cleaning</div>
+      <div class="dcard-desc">Raw document extraction is messy. PDFs produce garbled text, merged columns, repeated headers, and OCR errors. Tables extract as random character sequences. HTML produces tag noise. Preprocessing normalizes encoding, removes boilerplate, fixes extraction artifacts, and standardizes whitespace — before any chunk ever reaches the embedding model.</div>
+    </div>
+    <div class="dcard tier1">
+      <div class="dcard-badge">PII Masking</div>
+      <div class="dcard-name">PII Masking</div>
+      <div class="dcard-desc">Production documents contain names, emails, phone numbers, SSNs, credit card numbers, and addresses. If these are chunked and indexed, they will be retrieved and surfaced in responses to users who should never see them. PII detection (using spaCy NER, Microsoft Presidio, or a custom NER model) and masking must run before indexing — not after.</div>
+    </div>
+    <div class="dcard tier1">
+      <div class="dcard-badge">Query Layer</div>
+      <div class="dcard-name">Query Reformulation</div>
+      <div class="dcard-desc">Users ask vague, ambiguous, or single-word questions that vector search handles poorly. "Tell me about the contract" is not a useful embedding. Query expansion rewrites it to "service level agreement payment terms termination clauses penalties." Techniques include HyDE (generate a hypothetical document, embed that), query expansion via LLM, and multi-query retrieval (run 3-5 reformulations and merge results).</div>
+    </div>
+  </div>
+
+<pre><code><span class="cm"># Query reformulation with HyDE — Hypothetical Document Embeddings</span>
+<span class="kw">from</span> anthropic <span class="kw">import</span> Anthropic
+
+client = Anthropic()
+
+<span class="kw">def</span> <span class="fn">hyde_retrieve</span>(user_query: str, vectorstore) -> list:
+    <span class="cm">"""Generate a hypothetical answer, embed it, use that for retrieval."""</span>
+    hypothetical_response = client.messages.create(
+        model=<span class="str">"claude-sonnet-4-6"</span>, max_tokens=<span class="nb">256</span>,
+        messages=[{
+            <span class="str">"role"</span>: <span class="str">"user"</span>,
+            <span class="str">"content"</span>: f<span class="str">"""Write a 2-paragraph document that would ideally answer
+this question. Be specific and use domain vocabulary.
+Question: {user_query}"""</span>
+        }]
+    ).content[<span class="nb">0</span>].text
+
+    <span class="cm"># The hypothetical doc uses domain vocabulary the real docs also use
+    # Its embedding lands closer to relevant chunks than the sparse query</span>
+    results = vectorstore.similarity_search(hypothetical_response, k=<span class="nb">5</span>)
+    <span class="kw">return</span> results
+
+<span class="cm"># Example: query "what happens if I miss a payment"
+# HyDE generates: "If a customer fails to make a scheduled payment, the
+# contract specifies a grace period of 5 business days after which..."
+# That document embeds near the actual contract terms — better retrieval</span></code></pre>
+
+  <div class="callout dark-info">
+    <span class="callout-icon">💡</span>
+    <div class="callout-body"><strong>Why query reformulation matters:</strong> User queries are written in user language. Your documents are written in domain language. The embedding space bridges semantic similarity, but users asking "how do I cancel?" will not reliably match documents that say "termination clause" or "service discontinuation policy" without reformulation.</div>
+  </div>
+
+  <!-- ── TIER 2: POST-RETRIEVAL ── -->
+  <h3 class="light" style="color:var(--gold)">Tier 2 — Post-Retrieval: After You Find Candidates</h3>
+
+  <div class="depth-grid">
+    <div class="dcard tier2">
+      <div class="dcard-badge">Post-Retrieval</div>
+      <div class="dcard-name">Reranking (Cross-Encoders)</div>
+      <div class="dcard-desc">Your bi-encoder embedding model retrieves the top-50 candidates fast but imprecisely. A cross-encoder reranker then scores each candidate against the query jointly — slower but far more accurate. Cross-encoders like ms-marco-MiniLM-L-6-v2 process (query, doc) pairs together, capturing fine-grained relevance that embedding similarity misses. Reranking is the single highest-ROI improvement for most RAG systems.</div>
+    </div>
+    <div class="dcard tier2">
+      <div class="dcard-badge">Evaluation</div>
+      <div class="dcard-name">Evaluation Metrics & Retrieval Testing</div>
+      <div class="dcard-desc">Context Precision (are retrieved chunks relevant?), Context Recall (did you retrieve all relevant chunks?), Faithfulness (are claims in the answer supported by context?), Answer Relevancy (does the answer address the question?). 70% of RAG systems in production lack systematic evaluation — making it impossible to know when a code change breaks retrieval quality.</div>
+    </div>
+    <div class="dcard tier2">
+      <div class="dcard-badge">Operations</div>
+      <div class="dcard-name">Latency vs Accuracy Tradeoff</div>
+      <div class="dcard-desc">Every layer you add — reranking, query expansion, multi-query retrieval, LLM-as-judge evaluation — adds latency. The LiveRAG 2025 challenge showed reranking improved MAP by 52% but increased query time from 1.74s to 84s. Production systems need an explicit latency budget and architectural decisions that respect it — not every accuracy improvement is deployable.</div>
+    </div>
+  </div>
+
+<pre><code><span class="cm"># Cross-encoder reranking — the accuracy boost that costs latency</span>
+<span class="kw">from</span> sentence_transformers <span class="kw">import</span> CrossEncoder
+
+<span class="cm"># Stage 1: Bi-encoder retrieves candidates fast (millions of docs, <50ms)</span>
+candidates = vectorstore.similarity_search(query, k=<span class="nb">50</span>)
+
+<span class="cm"># Stage 2: Cross-encoder re-scores top-50 candidates slowly but accurately</span>
+reranker = CrossEncoder(<span class="str">"cross-encoder/ms-marco-MiniLM-L-6-v2"</span>)
+
+pairs = [[query, doc.page_content] <span class="kw">for</span> doc <span class="kw">in</span> candidates]
+scores = reranker.predict(pairs)          <span class="cm"># (query, doc) processed together</span>
+
+<span class="cm"># Sort by reranker score, take top-5 for LLM context</span>
+ranked = sorted(zip(scores, candidates), reverse=<span class="kw">True</span>)
+top_docs = [doc <span class="kw">for</span> _, doc <span class="kw">in</span> ranked[:5]]
+
+<span class="cm"># Why this matters:
+# Bi-encoder: "cat" and "dog" have similar embeddings → both retrieved
+# Cross-encoder: sees full (query + doc) pair → scores by actual relevance
+# Cost: 50 cross-encoder inference calls vs 1 ANN search
+# Benefit: context precision improves significantly on ambiguous queries</span></code></pre>
+
+  <!-- ── TIER 3: GENERATION SAFETY ── -->
+  <h3 class="light" style="color:#fca5a5">Tier 3 — Generation: Quality, Safety, and Control</h3>
+
+  <div class="depth-grid">
+    <div class="dcard tier3">
+      <div class="dcard-badge">Safety</div>
+      <div class="dcard-name">Hallucination Detection & Control</div>
+      <div class="dcard-desc">Even with correct documents retrieved, LLMs hallucinate in up to 40% of responses on noisy context. Faithfulness evaluation (RAGAS) decomposes each answer into atomic claims and checks each against retrieved context. A faithfulness score below 0.8 means 20% of claims have no retrieval support — those are hallucinations. Regulated industries should target 0.9+.</div>
+    </div>
+    <div class="dcard tier3">
+      <div class="dcard-badge">Reliability</div>
+      <div class="dcard-name">Error Analysis & Feedback Loops</div>
+      <div class="dcard-desc">Production failures must become test cases. Every hallucination, every mis-retrieved chunk, every user-reported error should be captured, labeled, and added to the evaluation dataset. Without this loop, the same failures recur. With it, your system continuously improves from real-world usage patterns — not just from your synthetic test set.</div>
+    </div>
+    <div class="dcard tier3">
+      <div class="dcard-badge">Architecture</div>
+      <div class="dcard-name">Custom Retriever Architectures</div>
+      <div class="dcard-desc">Hybrid (BM25 + dense), multi-hop (retrieve → reason → retrieve again), self-RAG (the model decides when to retrieve), GraphRAG (knowledge graphs for entity reasoning). Different architectures solve different failure modes. Choosing the right one requires knowing which failure mode is actually hurting your system — which requires the evaluation infrastructure from Tier 2.</div>
+    </div>
+  </div>
+
+<pre><code><span class="cm"># Faithfulness evaluation with RAGAS</span>
+<span class="kw">from</span> ragas.metrics <span class="kw">import</span> faithfulness, context_precision, answer_relevancy
+<span class="kw">from</span> ragas <span class="kw">import</span> evaluate
+<span class="kw">from</span> datasets <span class="kw">import</span> Dataset
+
+<span class="cm"># Your RAG pipeline output</span>
+data = {
+    <span class="str">"question"</span>: [<span class="str">"What is the penalty for late payment?"</span>],
+    <span class="str">"answer"</span>:   [<span class="str">"There is a 5% late fee after 30 days."</span>],
+    <span class="str">"contexts"</span>: [[
+        <span class="str">"Section 4.2: Late payment fees of 5% apply after 30 calendar days."</span>,
+        <span class="str">"Section 4.3: Disputed invoices are exempt from late fees."</span>
+    ]],
+    <span class="str">"ground_truth"</span>: [<span class="str">"A 5% late fee applies after 30 calendar days."</span>]
+}
+
+result = evaluate(Dataset.from_dict(data),
+                  metrics=[faithfulness, context_precision, answer_relevancy])
+
+<span class="fn">print</span>(result)
+<span class="cm"># faithfulness: 1.0      → every claim is grounded in retrieved context
+# context_precision: 0.8  → 80% of retrieved chunks were actually needed
+# answer_relevancy: 0.95  → answer directly addresses the question
+
+# Action thresholds (production):
+# faithfulness < 0.8  → investigate hallucination sources
+# context_precision < 0.5 → retrieval is surfacing too much noise
+# answer_relevancy < 0.7  → generation is going off-topic</span></code></pre>
+
+  <hr class="div-dark">
+
+  <!-- ── DEEP LAYER ── -->
+  <h3 class="light" style="color:var(--dim)">The Deepest Layer — Rarely in Tutorials</h3>
+
+  <div class="depth-grid">
+    <div class="dcard tier1">
+      <div class="dcard-badge">Efficiency</div>
+      <div class="dcard-name">Retrieval Cache Management</div>
+      <div class="dcard-desc">Embedding the same query twice is wasteful. Semantic caching stores query embeddings and their results, returning cached answers for semantically similar future queries. This cuts latency from 500ms to under 10ms for cache hits and reduces embedding API costs. Tools: GPTCache, Redis with vector similarity, or a simple FAISS index of recent queries.</div>
+    </div>
+    <div class="dcard tier1">
+      <div class="dcard-badge">Scale</div>
+      <div class="dcard-name">Knowledge Distillation for Smaller Models</div>
+      <div class="dcard-desc">GPT-4-class retrieval at GPT-3.5 cost. Distillation trains a smaller embedding or generation model on the outputs of a larger model — preserving most of the accuracy at a fraction of the inference cost. Critical when you need sub-100ms latency at thousands of queries per second.</div>
+    </div>
+    <div class="dcard tier2">
+      <div class="dcard-badge">Infrastructure</div>
+      <div class="dcard-name">Hardware Constraints</div>
+      <div class="dcard-desc">Embedding models need GPU. Rerankers need GPU. The LLM needs GPU. Each query can touch all three in sequence. Hardware budgeting — which models need GPU, which can run CPU-only, when to cache, when to batch — directly determines whether your RAG system is economically viable at scale.</div>
+    </div>
+    <div class="dcard tier2">
+      <div class="dcard-badge">Continuous Learning</div>
+      <div class="dcard-name">Continuous Fine-Tuning Based on User Feedback</div>
+      <div class="dcard-desc">Collect thumbs-up/thumbs-down signal. Label the retrievals that led to good vs bad answers. Use that signal to fine-tune the embedding model or the reranker on your domain. Systems that do this improve steadily; systems that do not plateau at demo-level quality.</div>
+    </div>
+    <div class="dcard tier3">
+      <div class="dcard-badge">Security</div>
+      <div class="dcard-name">Secure Retrieval</div>
+      <div class="dcard-desc">Row-level security for vector databases. If user A should not see user B's documents, you cannot just filter post-retrieval — the ANN search itself must be scoped. Metadata filters, tenant isolation, and access control at the vector store level are prerequisites for any multi-tenant RAG deployment.</div>
+    </div>
+    <div class="dcard tier3">
+      <div class="dcard-badge">Reasoning</div>
+      <div class="dcard-name">Multi-Hop Retrieval</div>
+      <div class="dcard-desc">Some questions require chaining multiple retrievals. "Who signed the contract with the highest penalty clause?" requires finding the contract, finding the penalty clauses, comparing them, then looking up the signatory. Multi-hop RAG agents retrieve → reason → reformulate → retrieve again — often 3-5 hops deep before generating the final answer.</div>
+    </div>
+    <div class="dcard tier3">
+      <div class="dcard-badge">Responsibility</div>
+      <div class="dcard-name">Ethical Bias Checks</div>
+      <div class="dcard-desc">Embedding models encode historical biases. Retrieval can systematically surface or suppress documents along demographic lines. Evaluation should include retrieval bias audits — do queries about different user groups return systematically different quality results? For regulated industries, this is a compliance requirement, not a nice-to-have.</div>
+    </div>
+  </div>
+
+  <!-- METRICS TABLE -->
+  <h3 class="light" style="color:var(--ocean-light);margin-top:48px">The 5 Evaluation Metrics That Define Production Quality</h3>
+  <p class="light">Every metric below is measurable, automatable, and tells you a different thing about where your system is failing. You need all five — they are complementary, not redundant.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>What it measures</th>
+          <th>Target</th>
+          <th>What low score means</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Faithfulness</strong></td>
+          <td>Are answer claims supported by retrieved context?</td>
+          <td class="target">≥ 0.80 (≥0.90 regulated)</td>
+          <td class="bad">LLM is hallucinating from training memory</td>
+        </tr>
+        <tr>
+          <td><strong>Context Precision</strong></td>
+          <td>What fraction of retrieved chunks were actually needed?</td>
+          <td class="target">≥ 0.75</td>
+          <td class="bad">Retrieval returning noisy irrelevant chunks → confuses LLM</td>
+        </tr>
+        <tr>
+          <td><strong>Context Recall</strong></td>
+          <td>Did retrieval find all relevant information?</td>
+          <td class="target">≥ 0.80</td>
+          <td class="bad">Important information exists in corpus but was not retrieved</td>
+        </tr>
+        <tr>
+          <td><strong>Answer Relevancy</strong></td>
+          <td>Does the answer directly address the question?</td>
+          <td class="target">≥ 0.75</td>
+          <td class="bad">Retrieval pulled adjacent-but-wrong chunks; generation is tangential</td>
+        </tr>
+        <tr>
+          <td><strong>Hallucination Rate</strong></td>
+          <td>% of responses with claims not in retrieved context</td>
+          <td class="good">≤ 5% for most apps</td>
+          <td class="bad">5% = 1 in 20 responses contains fabricated information</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- OPINION -->
+  <div class="opinion">
+    <div class="opinion-text">The iceberg framing is exactly right — and the reason most teams hit the waterline and stop is not laziness, it is metrics. If you cannot measure a problem, you cannot justify fixing it. The teams I see building reliable production RAG are the ones who set up RAGAS evaluations before they set up Pinecone. They treat evaluation as the foundation, not as the polish at the end. Every builder-layer concept in this post exists because someone eventually measured what was going wrong — and only then could they fix it.</div>
+    <div class="opinion-attr">— Personal take · Based on RAG system design patterns observed across production deployments, 2024–2026</div>
+  </div>
+
+</div>
+</div>
+
+<!-- BACK TO LIGHT -->
+<div class="above-section">
+<div class="container section-pad">
+
+  <!-- EXCALIDRAW -->
+  <div class="excali">
+    <strong>Excalidraw / Napkin AI Diagram Prompt</strong>
+    "Draw an iceberg diagram showing RAG complexity. Above the waterline (light blue sky background): label 'RAG for Beginners'. Show 7 items labeled and pointed to the tip of the iceberg: LangChain/LlamaIndex, Basic Retrieval Pipeline, Data Loaders, Chunking & Embeddings, Vector Databases, Prompt Templates, LLMs + Retrieval. Draw a horizontal waterline dividing the diagram. Below the waterline (dark deep blue ocean): label 'RAG for Builders'. Show 15+ items pointed to the submerged body of the iceberg, organized in clusters: Pre-retrieval cluster [Preprocessing, PII Masking, Query Reformulation], Post-retrieval cluster [Reranking, Evaluation Metrics, Retrieval Testing, Latency vs Accuracy, Retrieval Cache Management], Generation cluster [Hallucination Detection, Error Analysis & Feedback Loops, Knowledge Distillation, Hardware Constraints], Deep layer cluster [Continuous Fine-Tuning, Secure Retrieval, Multi-hop Retrieval, Ethical Bias Checks]. The iceberg below water is much larger than above. Clean technical style, two-tone color scheme: sky blue above, deep navy below."
+  </div>
+
+  <!-- CONCLUSION -->
+  <div class="conclusion">
+    <h2>Three Things to Take Away</h2>
+    <p class="dark"><strong>First: the beginner stack is not wrong — it is incomplete.</strong> LangChain, embeddings, vector databases, and prompt templates are the necessary foundation. Every builder-layer concept depends on having that foundation in place. The mistake is treating the foundation as the finished building.</p>
+    <p class="dark"><strong>Second: evaluation is the gateway to the builder layer.</strong> You cannot fix what you cannot measure. Context precision, context recall, faithfulness, and answer relevancy tell you specifically which part of your pipeline is failing — retrieval, reranking, or generation. Without these metrics, improvements are guesswork. With them, every engineering decision has a target. 70% of RAG systems in production lack these — which is why 70% of production RAG systems are stuck at demo quality.</p>
+    <p class="dark"><strong>Third: the deepest layers are where competitive moats are built.</strong> Continuous fine-tuning on user feedback, semantic caching, multi-hop retrieval, secure tenant isolation — these are not features you add once. They are systems you build and maintain. The teams shipping reliable enterprise RAG at scale have invested engineering time in every layer of the iceberg, not just the visible tip.</p>
+    <p class="dark" style="margin-top:18px;color:var(--muted);font-size:15px">The iceberg image that inspired this post captures it perfectly: what you see above water is a small fraction of what keeps the whole structure stable. The stability is entirely in what you cannot see.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-block">
+    <div class="cta-label">Your next step</div>
+    <div class="cta-text">Add RAGAS evaluation to your RAG pipeline this week. Run it on 50 queries from real user traffic. Check faithfulness, context precision, and answer relevancy. Post your scores — even if they are not impressive. Knowing your baseline is the first step to improving it, and most teams have no idea what their current scores are.</div>
+  </div>
+
+  <!-- DISCUSSION -->
+  <div class="discussion">
+    <p><strong>Discussion —</strong> Which layer of the iceberg surprised you most when you first encountered it in production? For most engineers it is either hallucination detection (the LLM is faithful to wrong context) or PII masking (documents you thought were safe, were not). What was yours?</p>
+  </div>
+
+  <!-- RELATED -->
+  <span class="related-label">Related posts to write next</span>
+  <div class="related-grid">
+    <div class="related-card">
+      <div class="rc-tag">Tutorial</div>
+      <div class="rc-title">Setting Up RAGAS in CI/CD — Automated RAG Evaluation That Catches Regressions Before They Ship</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Deep-Dive</div>
+      <div class="rc-title">Multi-Hop RAG — How to Build Agents That Chain Multiple Retrievals to Answer Complex Questions</div>
+    </div>
+    <div class="related-card">
+      <div class="rc-tag">Production Guide</div>
+      <div class="rc-title">Secure RAG in Multi-Tenant Systems — Row-Level Security for Vector Databases</div>
+    </div>
+  </div>
+
+  <!-- SEO -->
+  <div class="seo-block">
+    <h3>SEO Checklist</h3>
+    <div class="seo-row"><strong>Primary keyword:</strong> hidden complexity of RAG</div>
+    <div class="seo-row"><strong>URL slug:</strong> <code>/blog/hidden-complexity-of-rag-production-guide</code></div>
+    <div class="seo-row" style="margin-top:10px"><strong>Secondary keywords:</strong></div>
+    <div class="tag-list" style="margin-bottom:12px">
+      <span class="seo-tag">RAG for builders</span>
+      <span class="seo-tag">RAG evaluation metrics</span>
+      <span class="seo-tag">hallucination detection RAG</span>
+      <span class="seo-tag">cross-encoder reranking</span>
+      <span class="seo-tag">production RAG pipeline</span>
+    </div>
+    <div class="seo-row"><strong>Tags:</strong></div>
+    <div class="tag-list">
+      <span class="seo-tag">rag</span>
+      <span class="seo-tag">production-ai</span>
+      <span class="seo-tag">reranking</span>
+      <span class="seo-tag">hallucination</span>
+      <span class="seo-tag">evaluation</span>
+      <span class="seo-tag">ragas</span>
+      <span class="seo-tag">query-reformulation</span>
+      <span class="seo-tag">pii-masking</span>
+      <span class="seo-tag">ai-engineering</span>
+    </div>
+    <div style="font-family:'Courier Prime',monospace;font-size:11px;color:var(--dim);margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      Image credit: PracticAI — "The Hidden Complexity of RAG" iceberg infographic · Sources: NStarX — Next Frontier of RAG 2026–2030 (Dec 2025) · PremAI Blog — RAG Evaluation Metrics 2026 (March 2026) · Dextralabs — 10 RAG Projects 2026 (Jan 2026) · MEGA-RAG: Hallucination mitigation (PMC 2025) · Braintrust — 5 Best RAG Evaluation Tools (Oct 2025) · Stanford AI Lab — RAG hallucination rates research
+    </div>
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>
